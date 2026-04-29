@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "ui/accelerated_widget_mac/display_ca_layer_tree.h"
+#include "ui/accelerated_widget_mac/owl_fresh_context.h"
 
 #import <QuartzCore/QuartzCore.h>
 
@@ -123,6 +124,10 @@ void DisplayCALayerTree::UpdateCALayerTree(
 void DisplayCALayerTree::GotCALayerFrame(uint32_t ca_context_id) {
   // Early-out if the remote layer has not changed.
   if (remote_layer_.contextId == ca_context_id) {
+#if BUILDFLAG(IS_MAC)
+    ui::OwlFreshDisplayPortalPresentCAContext(ca_context_id,
+                                              root_layer_.bounds);
+#endif
     return;
   }
 
@@ -150,6 +155,11 @@ void DisplayCALayerTree::GotCALayerFrame(uint32_t ca_context_id) {
     [io_surface_layer_ removeFromSuperlayer];
     io_surface_layer_ = nil;
   }
+
+#if BUILDFLAG(IS_MAC)
+  ui::OwlFreshDisplayPortalPresentCAContext(ca_context_id,
+                                            root_layer_.bounds);
+#endif
 }
 
 void DisplayCALayerTree::GotIOSurfaceFrame(
@@ -185,6 +195,11 @@ void DisplayCALayerTree::GotIOSurfaceFrame(
     [remote_layer_ removeFromSuperlayer];
     remote_layer_ = nil;
   }
+
+#if BUILDFLAG(IS_MAC)
+  ui::OwlFreshDisplayPortalPresentLayer(maybe_flipped_layer_,
+                                        root_layer_.bounds);
+#endif
 }
 
 }  // namespace ui

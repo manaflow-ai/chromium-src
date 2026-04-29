@@ -6,6 +6,7 @@
 #define CONTENT_SHELL_BROWSER_SHELL_DEVTOOLS_FRONTEND_H_
 
 #include <memory>
+#include <string>
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -20,7 +21,9 @@ class WebContents;
 class ShellDevToolsFrontend : public ShellDevToolsDelegate,
                               public WebContentsObserver {
  public:
-  static ShellDevToolsFrontend* Show(WebContents* inspected_contents);
+  static ShellDevToolsFrontend* Show(
+      WebContents* inspected_contents,
+      std::string initial_dock_state = std::string());
 
   ShellDevToolsFrontend(const ShellDevToolsFrontend&) = delete;
   ShellDevToolsFrontend& operator=(const ShellDevToolsFrontend&) = delete;
@@ -38,7 +41,9 @@ class ShellDevToolsFrontend : public ShellDevToolsDelegate,
   void PrimaryMainDocumentElementAvailable() override;
   void WebContentsDestroyed() override;
 
-  ShellDevToolsFrontend(Shell* frontend_shell, WebContents* inspected_contents);
+  ShellDevToolsFrontend(Shell* frontend_shell,
+                        WebContents* inspected_contents,
+                        std::string initial_dock_state);
   ~ShellDevToolsFrontend() override;
   raw_ptr<Shell> frontend_shell_;
   std::unique_ptr<ShellDevToolsBindings> devtools_bindings_;

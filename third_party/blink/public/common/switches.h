@@ -43,6 +43,7 @@ BLINK_COMMON_EXPORT extern const char
     kGpuMemoryBufferReadbackFromTextureForceDisabledForDebugging[];
 BLINK_COMMON_EXPORT extern const char kGpuRasterizationMSAASampleCount[];
 BLINK_COMMON_EXPORT extern const char kForceGpuMemAvailableMb[];
+BLINK_COMMON_EXPORT extern const char kFreshOwlHostedFramePump[];
 BLINK_COMMON_EXPORT extern const char
     kIntensiveWakeUpThrottlingPolicy_ForceDisable[];
 BLINK_COMMON_EXPORT extern const char

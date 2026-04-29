@@ -6,7 +6,10 @@
 
 #import <Cocoa/Cocoa.h>
 
+#include <algorithm>
 #include <memory>
+#include <string>
+#include <vector>
 
 #include "base/command_line.h"
 #include "base/memory/raw_ptr.h"
@@ -26,6 +29,7 @@
 #include "content/shell/common/shell_switches.h"
 #include "third_party/blink/public/common/context_menu_data/edit_flags.h"
 #include "third_party/blink/public/mojom/context_menu/context_menu.mojom.h"
+#include "ui/accelerated_widget_mac/owl_fresh_context.h"
 
 using blink::ContextMenuDataEditFlags;
 
@@ -78,6 +82,19 @@ NSMenuItem* MakeContextMenuItem(NSString* title,
   [menu addItem:menu_item];
 
   return menu_item;
+}
+
+std::vector<std::string> MenuItemTitles(NSMenu* menu) {
+  std::vector<std::string> titles;
+  for (NSMenuItem* item in menu.itemArray) {
+    if (item.separatorItem) {
+      titles.push_back("---");
+      continue;
+    }
+    const char* title = item.title.UTF8String;
+    titles.push_back(title ? title : "");
+  }
+  return titles;
 }
 
 }  // namespace
@@ -203,6 +220,16 @@ void ShellWebContentsViewDelegate::ShowContextMenu(
                       menu,
                       YES,
                       delegate);
+
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch("fresh-owl-embed")) {
+    ui::OwlFreshPublishNativeMenuSurface(
+        reinterpret_cast<uint64_t>(this),
+        reinterpret_cast<uint64_t>(web_contents_->GetRenderWidgetHostView()),
+        CGRectMake(params.x, params.y, 1, 1), 1.0f, MenuItemTitles(menu),
+        std::vector<ui::OwlFreshNativeMenuItem>(), -1, 0.0f, false,
+        "context-menu");
+    return;
+  }
 
   NSView* parent_view = web_contents_->GetContentNativeView().GetNativeNSView();
   NSPoint position = parent_view.window.mouseLocationOutsideOfEventStream;

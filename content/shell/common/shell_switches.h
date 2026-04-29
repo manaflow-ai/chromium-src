@@ -40,6 +40,8 @@ inline constexpr char kContentShellHostWindowSize[] =
 // Hides toolbar from content_shell's host window.
 inline constexpr char kContentShellHideToolbar[] = "content-shell-hide-toolbar";
 
+inline constexpr char kFreshOwlEmbed[] = "fresh-owl-embed";
+
 // Enables APIs guarded with the [IsolatedContext] IDL attribute for the given
 // comma-separated list of origins.
 inline constexpr char kIsolatedContextOrigins[] = "isolated-context-origins";

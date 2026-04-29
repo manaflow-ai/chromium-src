@@ -46,6 +46,8 @@ class PopupMenuHelper : public RenderWidgetHostObserver {
 
   ~PopupMenuHelper() override;
   void Hide();
+  void OwlFreshAcceptItem(uint32_t selected_item);
+  void OwlFreshCancel();
 
   // Shows the popup menu and notifies the RenderFrameHost of the selection/
   // cancellation. This call is blocking.
@@ -79,6 +81,9 @@ class PopupMenuHelper : public RenderWidgetHostObserver {
 
   base::WeakPtrFactory<PopupMenuHelper> weak_ptr_factory_{this};
 };
+
+CONTENT_EXPORT bool OwlFreshAcceptActivePopupMenuItem(uint32_t selected_item);
+CONTENT_EXPORT bool OwlFreshCancelActivePopupMenu();
 
 }  // namespace content
 

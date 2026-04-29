@@ -170,12 +170,17 @@ void ShellDevToolsBindings::InspectElementAt(int x, int y) {
 
 ShellDevToolsBindings::ShellDevToolsBindings(WebContents* devtools_contents,
                                              WebContents* inspected_contents,
-                                             ShellDevToolsDelegate* delegate)
+                                             ShellDevToolsDelegate* delegate,
+                                             std::string initial_dock_state)
     : WebContentsObserver(devtools_contents),
       inspected_contents_(inspected_contents),
       delegate_(delegate),
       inspect_element_at_x_(-1),
       inspect_element_at_y_(-1) {
+  if (!initial_dock_state.empty()) {
+    preferences_.Set("currentDockState",
+                     base::StringPrintf("\"%s\"", initial_dock_state.c_str()));
+  }
   auto* bindings = GetShellDevtoolsBindingsInstances();
   DCHECK(!std::ranges::contains(*bindings, this));
   bindings->push_back(this);

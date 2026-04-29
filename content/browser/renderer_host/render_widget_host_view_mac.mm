@@ -84,6 +84,8 @@
 #include "ui/gfx/mac/coordinate_conversion.h"
 #include "ui/gfx/native_ui_types.h"
 #include "ui/menus/cocoa/text_services_context_menu.h"
+#include "content/browser/renderer_host/owl_fresh_web_contents_role.h"
+#include "ui/accelerated_widget_mac/owl_fresh_context.h"
 
 using blink::WebInputEvent;
 using blink::WebMouseEvent;
@@ -181,8 +183,38 @@ void RenderWidgetHostViewMac::AcceleratedWidgetCALayerParamsUpdated() {
   // Update the contents that the NSView is displaying.
   const gfx::CALayerParams* ca_layer_params =
       browser_compositor_->GetLastCALayerParams();
-  if (ca_layer_params)
+  if (ca_layer_params) {
+    if (base::CommandLine::ForCurrentProcess()->HasSwitch("fresh-owl-embed") &&
+        ca_layer_params->ca_context_id) {
+      gfx::Rect bounds = GetViewBounds();
+      WebContents* web_contents = GetWebContents();
+      const GURL visible_url = web_contents ? web_contents->GetVisibleURL() : GURL();
+      const bool is_devtools =
+          owl_fresh::IsDevToolsFrontend(web_contents) ||
+          (visible_url.SchemeIs("http") && visible_url.host() == "127.0.0.1" &&
+           visible_url.path().rfind("/devtools/", 0) == 0);
+      const ui::OwlFreshSurfaceKind surface_kind =
+          is_devtools ? ui::OwlFreshSurfaceKind::kDevTools
+                      : (popup_parent_host_view_
+                             ? ui::OwlFreshSurfaceKind::kPopupWidget
+                             : ui::OwlFreshSurfaceKind::kWebView);
+      const std::string surface_label =
+          is_devtools ? ui::OwlFreshDevToolsSurfaceLabel()
+                      : (popup_parent_host_view_ ? "popup-widget" : "web-view");
+      ui::OwlFreshDisplayPortalPresentCAContextForSurface(
+          reinterpret_cast<uint64_t>(this),
+          popup_parent_host_view_
+              ? reinterpret_cast<uint64_t>(popup_parent_host_view_.get())
+              : 0,
+          surface_kind, ca_layer_params->ca_context_id,
+          popup_parent_host_view_
+              ? CGRectMake(bounds.x(), bounds.y(), bounds.width(),
+                           bounds.height())
+              : CGRectMake(0, 0, bounds.width(), bounds.height()),
+          ca_layer_params->scale_factor, true, surface_label);
+    }
     ns_view_->SetCALayerParams(*ca_layer_params);
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -275,6 +307,9 @@ RenderWidgetHostViewMac::RenderWidgetHostViewMac(RenderWidgetHost* widget)
 }
 
 RenderWidgetHostViewMac::~RenderWidgetHostViewMac() {
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch("fresh-owl-embed")) {
+    ui::OwlFreshMarkSurfaceHidden(reinterpret_cast<uint64_t>(this));
+  }
   if (popup_parent_host_view_) {
     DCHECK(!popup_parent_host_view_->popup_child_host_view_ ||
            popup_parent_host_view_->popup_child_host_view_ == this);
@@ -510,6 +545,9 @@ void RenderWidgetHostViewMac::ShowWithVisibility(
 
 void RenderWidgetHostViewMac::Hide() {
   is_visible_ = false;
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch("fresh-owl-embed")) {
+    ui::OwlFreshMarkSurfaceHidden(reinterpret_cast<uint64_t>(this));
+  }
   ns_view_->SetVisible(is_visible_);
   browser_compositor_->SetViewVisible(is_visible_);
   WasOccluded();
@@ -589,6 +627,9 @@ void RenderWidgetHostViewMac::
 }
 
 void RenderWidgetHostViewMac::WasOccluded() {
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch("fresh-owl-embed")) {
+    return;
+  }
   if (host()->IsHidden()) {
     return;
   }
@@ -656,6 +697,9 @@ void RenderWidgetHostViewMac::Focus() {
 }
 
 bool RenderWidgetHostViewMac::HasFocus() {
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch("fresh-owl-embed")) {
+    return true;
+  }
   return is_first_responder_;
 }
 
@@ -1825,13 +1869,15 @@ void RenderWidgetHostViewMac::OnFirstResponderChanged(bool is_first_responder) {
   // - Losing focus:
   //   - Only when the host is currently focused.
   //   This prevents duplicate LostFocus notifications.
+  const bool fresh_owl_force_focus =
+      base::CommandLine::ForCurrentProcess()->HasSwitch("fresh-owl-embed");
   if (is_first_responder_) {
-    if (IsHeadless() || is_getting_focus_ || is_window_key_) {
+    if (fresh_owl_force_focus || IsHeadless() || is_getting_focus_ || is_window_key_) {
       host()->GotFocus();
       SetTextInputActive(true);
     }
   } else {
-    if (IsHeadless() || host()->is_focused()) {
+    if (fresh_owl_force_focus || IsHeadless() || host()->is_focused()) {
       SetTextInputActive(false);
       host()->LostFocus();
     }
@@ -1839,6 +1885,9 @@ void RenderWidgetHostViewMac::OnFirstResponderChanged(bool is_first_responder) {
 }
 
 void RenderWidgetHostViewMac::OnWindowIsKeyChanged(bool is_key) {
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch("fresh-owl-embed")) {
+    is_key = true;
+  }
   if (is_window_key_ == is_key)
     return;
   is_window_key_ = is_key;

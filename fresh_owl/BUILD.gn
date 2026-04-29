@@ -1,0 +1,17 @@
+
+shared_library("owl_fresh_mojo_runtime") {
+  testonly = true
+  sources = [
+    "owl_fresh_mojo_runtime.cc",
+    "owl_fresh_mojo_runtime.h",
+  ]
+  deps = [
+    "//base",
+    "//content/shell:shell_controller_mojom",
+    "//mojo/core/embedder",
+    "//mojo/public/cpp/bindings",
+    "//mojo/public/cpp/platform",
+    "//mojo/public/cpp/system",
+  ]
+  ldflags = [ "-Wl,-install_name,@rpath/libowl_fresh_mojo_runtime.dylib" ]
+}

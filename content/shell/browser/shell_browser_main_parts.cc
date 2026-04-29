@@ -188,7 +188,16 @@ int ShellBrowserMainParts::PreMainMessageLoopRun() {
   InitializeBrowserContexts();
   Shell::Initialize(CreateShellPlatformDelegate());
   net::NetModule::SetResourceProvider(PlatformResourceProvider);
-  ShellDevToolsManagerDelegate::StartHttpHandler(browser_context_.get());
+  const bool owl_fresh_devtools_enabled =
+      base::CommandLine::ForCurrentProcess()->HasSwitch(
+          "owl-fresh-enable-devtools");
+  if ((!base::CommandLine::ForCurrentProcess()->HasSwitch(
+           switches::kFreshOwlEmbed) ||
+       owl_fresh_devtools_enabled) &&
+      !base::CommandLine::ForCurrentProcess()->HasSwitch(
+          "owl-fresh-disable-devtools")) {
+    ShellDevToolsManagerDelegate::StartHttpHandler(browser_context_.get());
+  }
   InitializeMessageLoopContext();
   return 0;
 }

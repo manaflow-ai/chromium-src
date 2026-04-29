@@ -9,12 +9,8 @@ namespace display {
 NSScreen* GetNSScreenFromDisplayID(CGDirectDisplayID display_id) {
   for (NSScreen* screen in NSScreen.screens) {
     CGDirectDisplayID screen_display_id = kCGNullDirectDisplay;
-    if (@available(macOS 26, *)) {
-      screen_display_id = screen.CGDirectDisplayID;
-    } else {
-      screen_display_id =
-          [screen.deviceDescription[@"NSScreenNumber"] unsignedIntValue];
-    }
+    screen_display_id =
+        [screen.deviceDescription[@"NSScreenNumber"] unsignedIntValue];
     if (screen_display_id == display_id) {
       return screen;
     }

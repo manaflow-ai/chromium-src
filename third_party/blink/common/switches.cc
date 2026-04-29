@@ -103,6 +103,11 @@ const char kEnableZeroCopy[] = "enable-zero-copy";
 // cc.
 const char kForceGpuMemAvailableMb[] = "force-gpu-mem-available-mb";
 
+// Enables the hosted Owl frame pump for renderer and root compositor
+// scheduling.
+const char kFreshOwlHostedFramePump[] =
+    "fresh-owl-hosted-frame-pump";
+
 // Disables the GpuMemoryBufferReadbackFromTexture codepath for debugging
 // purposes.
 const char kGpuMemoryBufferReadbackFromTextureForceDisabledForDebugging[] =

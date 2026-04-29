@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <set>
+#include <string>
 
 #include "base/containers/span.h"
 #include "base/containers/unique_ptr_adapters.h"
@@ -37,7 +38,8 @@ class ShellDevToolsBindings : public WebContentsObserver,
  public:
   ShellDevToolsBindings(WebContents* devtools_contents,
                         WebContents* inspected_contents,
-                        ShellDevToolsDelegate* delegate);
+                        ShellDevToolsDelegate* delegate,
+                        std::string initial_dock_state = std::string());
 
   void InspectElementAt(int x, int y);
   virtual void Attach();

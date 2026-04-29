@@ -47,6 +47,7 @@
 #include "services/viz/privileged/mojom/compositing/display_private.mojom.h"
 #include "services/viz/privileged/mojom/compositing/external_begin_frame_controller.mojom.h"
 #include "services/viz/public/cpp/gpu/context_provider_command_buffer.h"
+#include "third_party/blink/public/common/switches.h"
 #include "ui/base/ozone_buildflags.h"
 #include "ui/base/ui_base_features.h"
 
@@ -432,8 +433,10 @@ void VizProcessTransportFactory::OnEstablishedGpuChannel(
   root_params->renderer_settings.display_id = compositor->display_id();
 #endif
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-  if (command_line->HasSwitch(switches::kDisableFrameRateLimit))
+  if (command_line->HasSwitch(switches::kDisableFrameRateLimit) ||
+      command_line->HasSwitch(blink::switches::kFreshOwlHostedFramePump)) {
     root_params->disable_frame_rate_limit = true;
+  }
 
 #if BUILDFLAG(IS_WIN)
   const bool using_direct_composition = GpuDataManagerImpl::GetInstance()

@@ -27,7 +27,7 @@ static GURL GetFrontendURL() {
 #if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
   const char* query_string = "";
 #else
-  const char* query_string = "?targetType=tab";
+  const char* query_string = "?targetType=tab&can_dock=true";
 #endif
 
   return GURL(base::StringPrintf(
@@ -37,11 +37,13 @@ static GURL GetFrontendURL() {
 
 // static
 ShellDevToolsFrontend* ShellDevToolsFrontend::Show(
-    WebContents* inspected_contents) {
+    WebContents* inspected_contents,
+    std::string initial_dock_state) {
   Shell* shell = Shell::CreateNewWindow(inspected_contents->GetBrowserContext(),
                                         GURL(), nullptr, gfx::Size());
   ShellDevToolsFrontend* devtools_frontend =
-      new ShellDevToolsFrontend(shell, inspected_contents);
+      new ShellDevToolsFrontend(shell, inspected_contents,
+                                std::move(initial_dock_state));
   shell->LoadURL(GetFrontendURL());
   return devtools_frontend;
 }
@@ -66,14 +68,17 @@ void ShellDevToolsFrontend::WebContentsDestroyed() {
   delete this;
 }
 
-ShellDevToolsFrontend::ShellDevToolsFrontend(Shell* frontend_shell,
-                                             WebContents* inspected_contents)
+ShellDevToolsFrontend::ShellDevToolsFrontend(
+    Shell* frontend_shell,
+    WebContents* inspected_contents,
+    std::string initial_dock_state)
     : WebContentsObserver(frontend_shell->web_contents()),
       frontend_shell_(frontend_shell),
       devtools_bindings_(
           new ShellDevToolsBindings(frontend_shell->web_contents(),
                                     inspected_contents,
-                                    this)) {}
+                                    this,
+                                    std::move(initial_dock_state))) {}
 
 ShellDevToolsFrontend::~ShellDevToolsFrontend() {}
 

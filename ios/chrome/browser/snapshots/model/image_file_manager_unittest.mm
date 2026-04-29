@@ -53,7 +53,7 @@ void ComputeColorComponents(CGImageRef cgImage,
     *blue = 3;
   }
 
-  if (byteOrder != kCGImageByteOrder32Host) {
+  if (byteOrder != kCGBitmapByteOrder32Host) {
     int lastChannel = (CGImageGetBitsPerPixel(cgImage) == 24) ? 2 : 3;
     *red = lastChannel - *red;
     *green = lastChannel - *green;

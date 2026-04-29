@@ -34,7 +34,7 @@ UIImage* CreateErrorUIImage(float scale) {
       /*bitsPerComponent=*/8,
       /*bytesPerRow=*/0, color_space.get(),
       static_cast<CGBitmapInfo>(kCGImageAlphaPremultipliedFirst) |
-          kCGImageByteOrder32Host));
+          kCGBitmapByteOrder32Host));
   CGContextSetRGBFillColor(context.get(), 1.0, 0.0, 0.0, 1.0);
   CGContextFillRect(context.get(), CGRectMake(0.0, 0.0, 16, 16));
   base::apple::ScopedCFTypeRef<CGImageRef> cg_image(

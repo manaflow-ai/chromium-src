@@ -3807,6 +3807,7 @@ void RenderProcessHostImpl::PropagateBrowserCommandLineToRenderer(
       blink::switches::kEnableOverlaysAndLowLatencyUsageForWebGL,
 #endif
       blink::switches::kForceGpuMemAvailableMb,
+      blink::switches::kFreshOwlHostedFramePump,
       blink::switches::
           kGpuMemoryBufferReadbackFromTextureForceDisabledForDebugging,
       blink::switches::kMinHeightForGpuRasterTile,

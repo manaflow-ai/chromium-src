@@ -9,6 +9,10 @@
 #include "content/public/browser/web_contents.h"
 #include "content/shell/browser/shell.h"
 
+#if BUILDFLAG(IS_MAC)
+#include "content/shell/browser/owl_fresh_host_mac.h"
+#endif
+
 #if !BUILDFLAG(IS_IOS)
 #include "content/public/browser/color_chooser.h"
 #endif
@@ -52,6 +56,11 @@ void ShellPlatformDelegate::RunFileChooser(
     RenderFrameHost* render_frame_host,
     scoped_refptr<FileSelectListener> listener,
     const blink::mojom::FileChooserParams& params) {
+#if BUILDFLAG(IS_MAC)
+  if (OwlFreshMaybeRunFileChooser(render_frame_host, listener, params)) {
+    return;
+  }
+#endif
   listener->FileSelectionCanceled();
 }
 #endif

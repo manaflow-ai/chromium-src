@@ -64,7 +64,7 @@ CGContextRef GraphicsContextCanvas::CgContext() {
   cg_context_.reset(CGBitmapContextCreate(
       offscreen_.getPixels(), offscreen_.width(), offscreen_.height(), 8,
       offscreen_.rowBytes(), color_space.get(),
-      kCGImageByteOrder32Host |
+      kCGBitmapByteOrder32Host |
           static_cast<CGBitmapInfo>(kCGImageAlphaPremultipliedFirst)));
   DCHECK(cg_context_);
 

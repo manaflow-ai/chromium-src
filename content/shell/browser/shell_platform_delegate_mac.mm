@@ -11,8 +11,10 @@
 #import "base/apple/foundation_util.h"
 #include "base/check_op.h"
 #include "base/memory/raw_ptr.h"
+#include "base/command_line.h"
 #include "base/notreached.h"
 #include "base/strings/sys_string_conversions.h"
+#include "content/shell/common/shell_switches.h"
 #include "components/input/native_web_keyboard_event.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_widget_host.h"
@@ -201,8 +203,30 @@ void ShellPlatformDelegate::CreatePlatformWindow(
     shell_data.url_edit_view = url_edit_view;
   }
 
-  // Show the new window.
-  [window makeKeyAndOrderFront:nil];
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+          switches::kFreshOwlEmbed)) {
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+    window.alphaValue = 0.01;
+    window.level = NSWindowLevel(NSNormalWindowLevel - 1000);
+    window.collectionBehavior =
+        NSWindowCollectionBehaviorStationary |
+        NSWindowCollectionBehaviorCanJoinAllSpaces |
+        NSWindowCollectionBehaviorIgnoresCycle;
+    window.ignoresMouseEvents = YES;
+    [window orderFront:nil];
+  } else {
+    if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+            "owl-fresh-visible-control")) {
+      [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+      window.level = NSFloatingWindowLevel;
+      window.collectionBehavior |=
+          NSWindowCollectionBehaviorStationary |
+          NSWindowCollectionBehaviorCanJoinAllSpaces;
+      [NSApp activateIgnoringOtherApps:YES];
+      [window orderFrontRegardless];
+    }
+    [window makeKeyAndOrderFront:nil];
+  }
 
   shell_data.delegate = delegate;
 }

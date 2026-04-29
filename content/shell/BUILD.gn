@@ -260,6 +260,8 @@ static_library("content_shell_lib") {
       "browser/shell_browser_main_parts_mac.mm",
       "browser/shell_javascript_dialog_mac.mm",
       "browser/shell_platform_delegate_mac.mm",
+      "browser/owl_fresh_host_mac.h",
+      "browser/owl_fresh_host_mac.mm",
       "browser/shell_web_contents_view_delegate_mac.mm",
     ]
   }
@@ -371,11 +373,14 @@ static_library("content_shell_lib") {
     "//third_party/blink/public/strings",
     "//third_party/inspector_protocol:crdtp",
     "//ui/base",
+    "//ui/accelerated_widget_mac",
     "//ui/base/clipboard",
     "//ui/base/ime/init",
     "//ui/gfx",
+    "//ui/gfx/codec",
     "//ui/gfx/geometry",
     "//ui/platform_window",
+    "//ui/snapshot",
     "//ui/strings:auto_image_annotation_strings",
     "//url",
     "//v8",
@@ -1142,4 +1147,22 @@ mojom("shell_controller_mojom") {
   testonly = true
   sources = [ "common/shell_controller.test-mojom" ]
   public_deps = [ "//mojo/public/mojom/base" ]
+}
+
+
+shared_library("owl_fresh_mojo_runtime") {
+  testonly = true
+  sources = [
+    "//fresh_owl/owl_fresh_mojo_runtime.cc",
+    "//fresh_owl/owl_fresh_mojo_runtime.h",
+  ]
+  deps = [
+    "//base",
+    "//content/shell:shell_controller_mojom",
+    "//mojo/core/embedder",
+    "//mojo/public/cpp/bindings",
+    "//mojo/public/cpp/platform",
+    "//mojo/public/cpp/system",
+  ]
+  ldflags = [ "-Wl,-install_name,@rpath/libowl_fresh_mojo_runtime.dylib" ]
 }

@@ -33,7 +33,7 @@ UIImage* UIImageWithSizeAndScale(CGFloat width, CGFloat height, CGFloat scale) {
       nullptr, target_size.width, target_size.height, 8, target_size.width * 4,
       color_space.get(),
       static_cast<CGBitmapInfo>(kCGImageAlphaPremultipliedFirst) |
-          kCGImageByteOrder32Host));
+          kCGBitmapByteOrder32Host));
 
   CGRect target_rect = CGRectMake(0, 0,
                                   target_size.width, target_size.height);

@@ -582,7 +582,8 @@ cc::LayerTreeSettings GenerateLayerTreeSettings(
       RuntimeEnabledFeatures::BackfaceVisibilityInteropEnabled();
 
   settings.disable_frame_rate_limit =
-      cmd.HasSwitch(::switches::kDisableFrameRateLimit);
+      cmd.HasSwitch(::switches::kDisableFrameRateLimit) ||
+      cmd.HasSwitch(switches::kFreshOwlHostedFramePump);
 
   settings.enable_hit_test_opaqueness = true;
 

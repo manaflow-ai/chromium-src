@@ -89,6 +89,7 @@
 #include "services/webnn/buildflags.h"
 #include "services/webnn/webnn_switches.h"
 #include "skia/buildflags.h"
+#include "third_party/blink/public/common/switches.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "ui/base/ui_base_features.h"
 #include "ui/base/ui_base_switches.h"
@@ -1345,8 +1346,10 @@ bool GpuProcessHost::LaunchGpuProcess() {
       browser_command_line,
       switches::GetWebNNSwitchesCopiedFromGpuProcessHost());
 
-  if (browser_command_line.HasSwitch(switches::kDisableFrameRateLimit))
+  if (browser_command_line.HasSwitch(switches::kDisableFrameRateLimit) ||
+      browser_command_line.HasSwitch(blink::switches::kFreshOwlHostedFramePump)) {
     cmd_line->AppendSwitch(switches::kDisableGpuVsync);
+  }
 
   if (browser_command_line.HasSwitch(switches::kForceHighPerformanceGPU)) {
     cmd_line->AppendSwitch(gpu::GpuDriverBugWorkaroundTypeToString(

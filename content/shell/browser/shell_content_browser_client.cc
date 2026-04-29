@@ -3,6 +3,9 @@
 // found in the LICENSE file.
 
 #include "content/shell/browser/shell_content_browser_client.h"
+#if BUILDFLAG(IS_MAC)
+#include "content/shell/browser/owl_fresh_host_mac.h"
+#endif
 
 #include <stddef.h>
 
@@ -189,6 +192,15 @@ class ShellControllerImpl : public mojom::ShellController {
   }
 
   void ShutDown() override { Shell::Shutdown(); }
+
+  void BindOwlFreshSession(
+      mojo::PendingReceiver<mojom::OwlFreshSession> receiver) override {
+#if BUILDFLAG(IS_MAC)
+    BindOwlFreshSessionForCurrentShell(std::move(receiver));
+#else
+    receiver.reset();
+#endif
+  }
 };
 
 void BindNetworkHintsHandler(

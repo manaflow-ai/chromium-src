@@ -59,7 +59,7 @@ TEST_F(TextDetectionImplMacTest, ScanOnce) {
       nullptr, width, height, /*bitsPerComponent=*/8,
       /*bytesPerRow=*/width * 4, rgb_colorspace.get(),
       static_cast<CGBitmapInfo>(kCGImageAlphaPremultipliedFirst) |
-          kCGImageByteOrder32Host));
+          kCGBitmapByteOrder32Host));
 
   // Draw a white background.
   CGContextSetRGBFillColor(context.get(), 1.0, 1.0, 1.0, 1.0);
