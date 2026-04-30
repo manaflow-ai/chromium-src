@@ -177,6 +177,10 @@ ShellDevToolsBindings::ShellDevToolsBindings(WebContents* devtools_contents,
       delegate_(delegate),
       inspect_element_at_x_(-1),
       inspect_element_at_y_(-1) {
+  // content_shell serves DevTools over HTTP and does not install Chrome's
+  // chrome://theme WebUI resource loader. Keep the frontend on its bundled
+  // baseline theme instead of asking the renderer to load devtools://theme CSS.
+  preferences_.Set("chrome-theme-colors", "false");
   if (!initial_dock_state.empty()) {
     preferences_.Set("currentDockState",
                      base::StringPrintf("\"%s\"", initial_dock_state.c_str()));
