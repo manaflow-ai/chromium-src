@@ -1155,6 +1155,8 @@ shared_library("owl_fresh_mojo_runtime") {
   sources = [
     "//fresh_owl/owl_fresh_mojo_runtime.cc",
     "//fresh_owl/owl_fresh_mojo_runtime.h",
+    "//fresh_owl/owl_fresh_mojo_runtime_objc.h",
+    "//fresh_owl/owl_fresh_mojo_runtime_objc.mm",
   ]
   deps = [
     "//base",
