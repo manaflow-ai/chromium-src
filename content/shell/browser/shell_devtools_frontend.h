@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "content/public/browser/web_contents_observer.h"
@@ -23,7 +24,9 @@ class ShellDevToolsFrontend : public ShellDevToolsDelegate,
  public:
   static ShellDevToolsFrontend* Show(
       WebContents* inspected_contents,
-      std::string initial_dock_state = std::string());
+      std::string initial_dock_state = std::string(),
+      base::RepeatingClosure frontend_close_callback =
+          base::RepeatingClosure());
 
   ShellDevToolsFrontend(const ShellDevToolsFrontend&) = delete;
   ShellDevToolsFrontend& operator=(const ShellDevToolsFrontend&) = delete;
@@ -31,6 +34,7 @@ class ShellDevToolsFrontend : public ShellDevToolsDelegate,
   void Activate();
   void InspectElementAt(int x, int y);
   void Close() override;
+  void RequestCloseFromFrontend() override;
 
   Shell* frontend_shell() const { return frontend_shell_; }
 
@@ -43,10 +47,12 @@ class ShellDevToolsFrontend : public ShellDevToolsDelegate,
 
   ShellDevToolsFrontend(Shell* frontend_shell,
                         WebContents* inspected_contents,
-                        std::string initial_dock_state);
+                        std::string initial_dock_state,
+                        base::RepeatingClosure frontend_close_callback);
   ~ShellDevToolsFrontend() override;
   raw_ptr<Shell> frontend_shell_;
   std::unique_ptr<ShellDevToolsBindings> devtools_bindings_;
+  base::RepeatingClosure frontend_close_callback_;
 
   base::WeakPtrFactory<ShellDevToolsFrontend> weak_ptr_factory_{this};
 };

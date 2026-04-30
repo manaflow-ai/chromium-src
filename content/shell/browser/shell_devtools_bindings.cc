@@ -159,6 +159,10 @@ class ShellDevToolsBindings::NetworkResourceLoader
 constexpr size_t kShellMaxMessageChunkSize =
     IPC::mojom::kChannelMaximumMessageSize / 4;
 
+void ShellDevToolsDelegate::RequestCloseFromFrontend() {
+  Close();
+}
+
 void ShellDevToolsBindings::InspectElementAt(int x, int y) {
   if (agent_host_) {
     agent_host_->InspectElement(inspected_contents_->GetFocusedFrame(), x, y);
@@ -348,6 +352,16 @@ void ShellDevToolsBindings::HandleMessageFromDevToolsFrontend(
     return;
   } else if (*method == "getHostConfig") {
     SendMessageAck(request_id, {});
+    return;
+  } else if (*method == "closeWindow") {
+    if (request_id)
+      SendMessageAck(request_id, {});
+    if (delegate_)
+      delegate_->RequestCloseFromFrontend();
+    return;
+  } else if (*method == "setIsDocked") {
+    if (request_id)
+      SendMessageAck(request_id, {});
     return;
   } else if (*method == "setPreference") {
     if (params.size() < 2)

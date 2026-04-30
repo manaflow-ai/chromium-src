@@ -4,8 +4,11 @@
 
 #include "content/shell/browser/shell_devtools_frontend.h"
 
+#include "base/functional/bind.h"
+#include "base/location.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/strings/utf_string_conversions.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
@@ -38,12 +41,14 @@ static GURL GetFrontendURL() {
 // static
 ShellDevToolsFrontend* ShellDevToolsFrontend::Show(
     WebContents* inspected_contents,
-    std::string initial_dock_state) {
+    std::string initial_dock_state,
+    base::RepeatingClosure frontend_close_callback) {
   Shell* shell = Shell::CreateNewWindow(inspected_contents->GetBrowserContext(),
                                         GURL(), nullptr, gfx::Size());
   ShellDevToolsFrontend* devtools_frontend =
       new ShellDevToolsFrontend(shell, inspected_contents,
-                                std::move(initial_dock_state));
+                                std::move(initial_dock_state),
+                                std::move(frontend_close_callback));
   shell->LoadURL(GetFrontendURL());
   return devtools_frontend;
 }
@@ -61,6 +66,19 @@ void ShellDevToolsFrontend::Close() {
   frontend_shell_->Close();
 }
 
+void ShellDevToolsFrontend::RequestCloseFromFrontend() {
+  if (frontend_close_callback_) {
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(
+                       [](base::RepeatingClosure callback) { callback.Run(); },
+                       frontend_close_callback_));
+    return;
+  }
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&ShellDevToolsFrontend::Close,
+                                weak_ptr_factory_.GetWeakPtr()));
+}
+
 void ShellDevToolsFrontend::PrimaryMainDocumentElementAvailable() {
   devtools_bindings_->Attach();
 }
@@ -72,14 +90,16 @@ void ShellDevToolsFrontend::WebContentsDestroyed() {
 ShellDevToolsFrontend::ShellDevToolsFrontend(
     Shell* frontend_shell,
     WebContents* inspected_contents,
-    std::string initial_dock_state)
+    std::string initial_dock_state,
+    base::RepeatingClosure frontend_close_callback)
     : WebContentsObserver(frontend_shell->web_contents()),
       frontend_shell_(frontend_shell),
       devtools_bindings_(
           new ShellDevToolsBindings(frontend_shell->web_contents(),
                                     inspected_contents,
                                     this,
-                                    std::move(initial_dock_state))) {}
+                                    std::move(initial_dock_state))),
+      frontend_close_callback_(std::move(frontend_close_callback)) {}
 
 ShellDevToolsFrontend::~ShellDevToolsFrontend() {}
 

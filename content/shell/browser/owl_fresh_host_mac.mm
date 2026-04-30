@@ -967,31 +967,39 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     }
 
     std::string label = "devtools-bottom";
-    // OWL owns the native dock layout. Keep the DevTools frontend itself
-    // undocked so it fills the DevTools surface instead of reserving inspected
-    // page space inside its own WebContents.
-    std::string dock_state = "undocked";
+    std::string dock_state = "bottom";
     switch (mode) {
       case mojom::OwlFreshDevToolsMode::kBottom:
         label = "devtools-bottom";
+        dock_state = "bottom";
         break;
       case mojom::OwlFreshDevToolsMode::kRight:
         label = "devtools-right";
+        dock_state = "right";
         break;
       case mojom::OwlFreshDevToolsMode::kLeft:
         label = "devtools-left";
+        dock_state = "left";
         break;
       case mojom::OwlFreshDevToolsMode::kWindow:
         label = "devtools-window";
+        dock_state = "undocked";
         break;
     }
     ui::OwlFreshSetDevToolsSurfaceLabel(label);
 
+    if (devtools_frontend_ && active_devtools_label_ != label) {
+      CloseDevToolsInternal();
+    }
+
     const bool created_devtools_frontend = !devtools_frontend_;
     if (created_devtools_frontend) {
-      ShellDevToolsFrontend* frontend =
-          ShellDevToolsFrontend::Show(shell->web_contents(), dock_state);
+      ShellDevToolsFrontend* frontend = ShellDevToolsFrontend::Show(
+          shell->web_contents(), dock_state,
+          base::BindRepeating(&OwlFreshSessionImpl::CloseDevToolsFromFrontend,
+                              weak_factory_.GetWeakPtr()));
       devtools_frontend_ = frontend->GetWeakPtr();
+      active_devtools_label_ = label;
       if (frontend->frontend_shell()) {
         owl_fresh::MarkDevToolsFrontend(
             frontend->frontend_shell()->web_contents());
@@ -1038,21 +1046,7 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
   }
 
   void CloseDevTools(CloseDevToolsCallback callback) override {
-    if (!devtools_frontend_) {
-      std::move(callback).Run(false);
-      return;
-    }
-    devtools_frontend_->Close();
-    devtools_frontend_ = base::WeakPtr<ShellDevToolsFrontend>();
-    ui::OwlFreshClearDevToolsDockLayout();
-    if (Shell* shell = CurrentShell()) {
-      shell->ResizeWebContentForTests(requested_size_);
-      EnsureWebContentsProducingFrames(shell->web_contents());
-    }
-    if (client_) {
-      client_->OnSurfaceTreeChanged(SurfaceTreeFromRegistry());
-    }
-    std::move(callback).Run(true);
+    std::move(callback).Run(CloseDevToolsInternal());
   }
 
   void EvaluateDevToolsJavaScript(
@@ -1079,6 +1073,27 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
   }
 
  private:
+  void CloseDevToolsFromFrontend() { CloseDevToolsInternal(); }
+
+  bool CloseDevToolsInternal() {
+    if (!devtools_frontend_) {
+      return false;
+    }
+    devtools_frontend_->Close();
+    devtools_frontend_ = base::WeakPtr<ShellDevToolsFrontend>();
+    active_devtools_label_.clear();
+    ui::OwlFreshClearDevToolsDockLayout();
+    if (Shell* shell = CurrentShell()) {
+      shell->ResizeWebContentForTests(requested_size_);
+      EnsureWebContentsProducingFrames(shell->web_contents());
+    }
+    if (client_) {
+      client_->OnSurfaceTreeChanged(SurfaceTreeFromRegistry());
+    }
+    PublishCompositorWithRetry(20);
+    return true;
+  }
+
   WebContents* ActiveDevToolsWebContents() const {
     if (!devtools_frontend_) {
       return nullptr;
@@ -1417,6 +1432,7 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
   mojo::ReceiverSet<mojom::OwlFreshNativeSurfaceHost> native_surface_receivers_;
   mojo::ReceiverSet<mojom::OwlFreshDevToolsHost> devtools_host_receivers_;
   base::WeakPtr<ShellDevToolsFrontend> devtools_frontend_;
+  std::string active_devtools_label_;
   base::WeakPtrFactory<OwlFreshSessionImpl> weak_factory_{this};
 };
 bool OwlFreshSelectActiveFilePickerFiles(

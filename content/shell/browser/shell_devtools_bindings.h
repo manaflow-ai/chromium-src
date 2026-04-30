@@ -28,6 +28,7 @@ class NavigationHandle;
 class ShellDevToolsDelegate {
  public:
   virtual void Close() = 0;
+  virtual void RequestCloseFromFrontend();
   virtual ~ShellDevToolsDelegate() {}
 };
 
