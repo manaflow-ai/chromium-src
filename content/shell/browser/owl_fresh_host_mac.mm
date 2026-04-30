@@ -923,7 +923,7 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
         break;
       case mojom::OwlFreshDevToolsMode::kWindow:
         label = "devtools-window";
-        dock_state = "right";
+        dock_state = "undocked";
         break;
     }
     ui::OwlFreshSetDevToolsSurfaceLabel(label);
