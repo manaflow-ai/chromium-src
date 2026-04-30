@@ -26,7 +26,9 @@ class ShellDevToolsFrontend : public ShellDevToolsDelegate,
       WebContents* inspected_contents,
       std::string initial_dock_state = std::string(),
       base::RepeatingClosure frontend_close_callback =
-          base::RepeatingClosure());
+          base::RepeatingClosure(),
+      base::RepeatingCallback<void(const std::string&)> dock_state_callback =
+          base::RepeatingCallback<void(const std::string&)>());
 
   ShellDevToolsFrontend(const ShellDevToolsFrontend&) = delete;
   ShellDevToolsFrontend& operator=(const ShellDevToolsFrontend&) = delete;
@@ -35,6 +37,7 @@ class ShellDevToolsFrontend : public ShellDevToolsDelegate,
   void InspectElementAt(int x, int y);
   void Close() override;
   void RequestCloseFromFrontend() override;
+  void DevToolsDockStateChanged(const std::string& dock_state) override;
 
   Shell* frontend_shell() const { return frontend_shell_; }
 
@@ -48,11 +51,14 @@ class ShellDevToolsFrontend : public ShellDevToolsDelegate,
   ShellDevToolsFrontend(Shell* frontend_shell,
                         WebContents* inspected_contents,
                         std::string initial_dock_state,
-                        base::RepeatingClosure frontend_close_callback);
+                        base::RepeatingClosure frontend_close_callback,
+                        base::RepeatingCallback<void(const std::string&)>
+                            dock_state_callback);
   ~ShellDevToolsFrontend() override;
   raw_ptr<Shell> frontend_shell_;
   std::unique_ptr<ShellDevToolsBindings> devtools_bindings_;
   base::RepeatingClosure frontend_close_callback_;
+  base::RepeatingCallback<void(const std::string&)> dock_state_callback_;
 
   base::WeakPtrFactory<ShellDevToolsFrontend> weak_ptr_factory_{this};
 };

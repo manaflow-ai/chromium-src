@@ -163,6 +163,9 @@ void ShellDevToolsDelegate::RequestCloseFromFrontend() {
   Close();
 }
 
+void ShellDevToolsDelegate::DevToolsDockStateChanged(
+    const std::string& dock_state) {}
+
 void ShellDevToolsBindings::InspectElementAt(int x, int y) {
   if (agent_host_) {
     agent_host_->InspectElement(inspected_contents_->GetFocusedFrame(), x, y);
@@ -372,6 +375,17 @@ void ShellDevToolsBindings::HandleMessageFromDevToolsFrontend(
     // the type we want, but don't worry about getting it.
     if (!name || !params[1].is_string())
       return;
+
+    if (*name == "currentDockState") {
+      const std::string* raw_value = params[1].GetIfString();
+      std::optional<base::Value> parsed_value =
+          raw_value ? base::JSONReader::Read(*raw_value, 0) : std::nullopt;
+      const std::string* dock_state =
+          parsed_value ? parsed_value->GetIfString() : nullptr;
+      if (dock_state && delegate_) {
+        delegate_->DevToolsDockStateChanged(*dock_state);
+      }
+    }
 
     preferences_.Set(*name, std::move(params[1]));
   } else if (*method == "removePreference") {

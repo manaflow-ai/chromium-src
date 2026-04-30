@@ -285,6 +285,50 @@ OwlFreshDevToolsDockBounds ComputeOwlFreshDevToolsDockBounds(
   return bounds;
 }
 
+const char* OwlFreshDevToolsLabelForMode(mojom::OwlFreshDevToolsMode mode) {
+  switch (mode) {
+    case mojom::OwlFreshDevToolsMode::kBottom:
+      return "devtools-bottom";
+    case mojom::OwlFreshDevToolsMode::kRight:
+      return "devtools-right";
+    case mojom::OwlFreshDevToolsMode::kLeft:
+      return "devtools-left";
+    case mojom::OwlFreshDevToolsMode::kWindow:
+      return "devtools-window";
+  }
+}
+
+const char* OwlFreshDevToolsDockStateForMode(
+    mojom::OwlFreshDevToolsMode mode) {
+  switch (mode) {
+    case mojom::OwlFreshDevToolsMode::kBottom:
+      return "bottom";
+    case mojom::OwlFreshDevToolsMode::kRight:
+      return "right";
+    case mojom::OwlFreshDevToolsMode::kLeft:
+      return "left";
+    case mojom::OwlFreshDevToolsMode::kWindow:
+      return "undocked";
+  }
+}
+
+std::optional<mojom::OwlFreshDevToolsMode> OwlFreshDevToolsModeForDockState(
+    const std::string& dock_state) {
+  if (dock_state == "bottom") {
+    return mojom::OwlFreshDevToolsMode::kBottom;
+  }
+  if (dock_state == "right") {
+    return mojom::OwlFreshDevToolsMode::kRight;
+  }
+  if (dock_state == "left") {
+    return mojom::OwlFreshDevToolsMode::kLeft;
+  }
+  if (dock_state == "undocked") {
+    return mojom::OwlFreshDevToolsMode::kWindow;
+  }
+  return std::nullopt;
+}
+
 std::string CaptureState(WebContents* contents, RenderWidgetHostView* view) {
   std::string url = contents ? contents->GetLastCommittedURL().spec() : "";
   gfx::Rect bounds = view ? view->GetViewBounds() : gfx::Rect();
@@ -966,27 +1010,8 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
       return;
     }
 
-    std::string label = "devtools-bottom";
-    std::string dock_state = "bottom";
-    switch (mode) {
-      case mojom::OwlFreshDevToolsMode::kBottom:
-        label = "devtools-bottom";
-        dock_state = "bottom";
-        break;
-      case mojom::OwlFreshDevToolsMode::kRight:
-        label = "devtools-right";
-        dock_state = "right";
-        break;
-      case mojom::OwlFreshDevToolsMode::kLeft:
-        label = "devtools-left";
-        dock_state = "left";
-        break;
-      case mojom::OwlFreshDevToolsMode::kWindow:
-        label = "devtools-window";
-        dock_state = "undocked";
-        break;
-    }
-    ui::OwlFreshSetDevToolsSurfaceLabel(label);
+    const std::string label = OwlFreshDevToolsLabelForMode(mode);
+    const std::string dock_state = OwlFreshDevToolsDockStateForMode(mode);
 
     if (devtools_frontend_ && active_devtools_label_ != label) {
       CloseDevToolsInternal();
@@ -997,50 +1022,22 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
       ShellDevToolsFrontend* frontend = ShellDevToolsFrontend::Show(
           shell->web_contents(), dock_state,
           base::BindRepeating(&OwlFreshSessionImpl::CloseDevToolsFromFrontend,
-                              weak_factory_.GetWeakPtr()));
+                              weak_factory_.GetWeakPtr()),
+          base::BindRepeating(
+              &OwlFreshSessionImpl::ApplyDevToolsDockStateFromFrontend,
+              weak_factory_.GetWeakPtr()));
       devtools_frontend_ = frontend->GetWeakPtr();
-      active_devtools_label_ = label;
       if (frontend->frontend_shell()) {
         owl_fresh::MarkDevToolsFrontend(
             frontend->frontend_shell()->web_contents());
       }
     }
 
-    WebContents* inspected_contents = shell->web_contents();
-    WebContents* devtools_contents = ActiveDevToolsWebContents();
-    if (!devtools_contents) {
-      Log("OpenDevTools failed: frontend WebContents was not created");
+    if (!ApplyDevToolsLayout(mode, label, created_devtools_frontend)) {
+      Log(base::StrCat({"OpenDevTools failed label=", label}));
       std::move(callback).Run(false);
       return;
     }
-    owl_fresh::MarkDevToolsFrontend(devtools_contents);
-
-    gfx::Rect inspected_bounds = inspected_contents->GetContainerBounds();
-    const int width =
-        std::max({requested_size_.width(), inspected_bounds.width(), 800});
-    const int height =
-        std::max({requested_size_.height(), inspected_bounds.height(), 600});
-    const OwlFreshDevToolsDockBounds dock_bounds =
-        ComputeOwlFreshDevToolsDockBounds(mode, width, height);
-    const gfx::Rect web_bounds = dock_bounds.web_bounds;
-    const gfx::Rect devtools_bounds = dock_bounds.devtools_bounds;
-    shell->ResizeWebContentForTests(web_bounds.size());
-    devtools_frontend_->frontend_shell()->ResizeWebContentForTests(
-        devtools_bounds.size());
-    ui::OwlFreshSetDevToolsDockLayout(
-        label,
-        CGRectMake(web_bounds.x(), web_bounds.y(), web_bounds.width(),
-                   web_bounds.height()),
-        CGRectMake(devtools_bounds.x(), devtools_bounds.y(),
-                   devtools_bounds.width(), devtools_bounds.height()));
-    EnsureWebContentsProducingFrames(inspected_contents);
-    EnsureWebContentsProducingFrames(devtools_contents);
-    if (created_devtools_frontend) {
-      devtools_frontend_->InspectElementAt(std::max(1, web_bounds.width() / 2),
-                                           std::max(1, web_bounds.height() / 2));
-    }
-    devtools_contents->Focus();
-    PublishCompositorWithRetry(60);
     Log(base::StrCat({"DevTools opened label=", label}));
     std::move(callback).Run(true);
   }
@@ -1074,6 +1071,74 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
 
  private:
   void CloseDevToolsFromFrontend() { CloseDevToolsInternal(); }
+
+  void ApplyDevToolsDockStateFromFrontend(const std::string& dock_state) {
+    std::optional<mojom::OwlFreshDevToolsMode> mode =
+        OwlFreshDevToolsModeForDockState(dock_state);
+    if (!mode || !devtools_frontend_) {
+      return;
+    }
+    const std::string label = OwlFreshDevToolsLabelForMode(*mode);
+    if (active_devtools_label_ == label) {
+      return;
+    }
+    if (ApplyDevToolsLayout(*mode, label, false)) {
+      Log(base::StrCat(
+          {"DevTools frontend changed dock state label=", label}));
+    }
+  }
+
+  bool ApplyDevToolsLayout(mojom::OwlFreshDevToolsMode mode,
+                           const std::string& label,
+                           bool inspect_element) {
+    Shell* shell = CurrentShell();
+    if (!shell || !shell->web_contents() || !devtools_frontend_ ||
+        !devtools_frontend_->frontend_shell()) {
+      return false;
+    }
+
+    WebContents* inspected_contents = shell->web_contents();
+    WebContents* devtools_contents = ActiveDevToolsWebContents();
+    if (!devtools_contents) {
+      return false;
+    }
+
+    ui::OwlFreshSetDevToolsSurfaceLabel(label);
+    active_devtools_label_ = label;
+    owl_fresh::MarkDevToolsFrontend(devtools_contents);
+
+    gfx::Rect inspected_bounds = inspected_contents->GetContainerBounds();
+    const int width =
+        std::max({requested_size_.width(), inspected_bounds.width(), 800});
+    const int height =
+        std::max({requested_size_.height(), inspected_bounds.height(), 600});
+    const OwlFreshDevToolsDockBounds dock_bounds =
+        ComputeOwlFreshDevToolsDockBounds(mode, width, height);
+    const gfx::Rect web_bounds = dock_bounds.web_bounds;
+    const gfx::Rect devtools_bounds = dock_bounds.devtools_bounds;
+
+    shell->ResizeWebContentForTests(web_bounds.size());
+    devtools_frontend_->frontend_shell()->ResizeWebContentForTests(
+        devtools_bounds.size());
+    ui::OwlFreshSetDevToolsDockLayout(
+        label,
+        CGRectMake(web_bounds.x(), web_bounds.y(), web_bounds.width(),
+                   web_bounds.height()),
+        CGRectMake(devtools_bounds.x(), devtools_bounds.y(),
+                   devtools_bounds.width(), devtools_bounds.height()));
+    EnsureWebContentsProducingFrames(inspected_contents);
+    EnsureWebContentsProducingFrames(devtools_contents);
+    if (inspect_element) {
+      devtools_frontend_->InspectElementAt(std::max(1, web_bounds.width() / 2),
+                                           std::max(1, web_bounds.height() / 2));
+    }
+    devtools_contents->Focus();
+    if (client_) {
+      client_->OnSurfaceTreeChanged(SurfaceTreeFromRegistry());
+    }
+    PublishCompositorWithRetry(60);
+    return true;
+  }
 
   bool CloseDevToolsInternal() {
     if (!devtools_frontend_) {

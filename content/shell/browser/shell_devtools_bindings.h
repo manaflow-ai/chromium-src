@@ -29,6 +29,7 @@ class ShellDevToolsDelegate {
  public:
   virtual void Close() = 0;
   virtual void RequestCloseFromFrontend();
+  virtual void DevToolsDockStateChanged(const std::string& dock_state);
   virtual ~ShellDevToolsDelegate() {}
 };
 

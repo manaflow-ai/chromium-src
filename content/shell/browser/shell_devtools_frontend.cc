@@ -42,13 +42,15 @@ static GURL GetFrontendURL() {
 ShellDevToolsFrontend* ShellDevToolsFrontend::Show(
     WebContents* inspected_contents,
     std::string initial_dock_state,
-    base::RepeatingClosure frontend_close_callback) {
+    base::RepeatingClosure frontend_close_callback,
+    base::RepeatingCallback<void(const std::string&)> dock_state_callback) {
   Shell* shell = Shell::CreateNewWindow(inspected_contents->GetBrowserContext(),
                                         GURL(), nullptr, gfx::Size());
   ShellDevToolsFrontend* devtools_frontend =
       new ShellDevToolsFrontend(shell, inspected_contents,
                                 std::move(initial_dock_state),
-                                std::move(frontend_close_callback));
+                                std::move(frontend_close_callback),
+                                std::move(dock_state_callback));
   shell->LoadURL(GetFrontendURL());
   return devtools_frontend;
 }
@@ -79,6 +81,13 @@ void ShellDevToolsFrontend::RequestCloseFromFrontend() {
                                 weak_ptr_factory_.GetWeakPtr()));
 }
 
+void ShellDevToolsFrontend::DevToolsDockStateChanged(
+    const std::string& dock_state) {
+  if (dock_state_callback_) {
+    dock_state_callback_.Run(dock_state);
+  }
+}
+
 void ShellDevToolsFrontend::PrimaryMainDocumentElementAvailable() {
   devtools_bindings_->Attach();
 }
@@ -91,7 +100,8 @@ ShellDevToolsFrontend::ShellDevToolsFrontend(
     Shell* frontend_shell,
     WebContents* inspected_contents,
     std::string initial_dock_state,
-    base::RepeatingClosure frontend_close_callback)
+    base::RepeatingClosure frontend_close_callback,
+    base::RepeatingCallback<void(const std::string&)> dock_state_callback)
     : WebContentsObserver(frontend_shell->web_contents()),
       frontend_shell_(frontend_shell),
       devtools_bindings_(
@@ -99,7 +109,8 @@ ShellDevToolsFrontend::ShellDevToolsFrontend(
                                     inspected_contents,
                                     this,
                                     std::move(initial_dock_state))),
-      frontend_close_callback_(std::move(frontend_close_callback)) {}
+      frontend_close_callback_(std::move(frontend_close_callback)),
+      dock_state_callback_(std::move(dock_state_callback)) {}
 
 ShellDevToolsFrontend::~ShellDevToolsFrontend() {}
 
