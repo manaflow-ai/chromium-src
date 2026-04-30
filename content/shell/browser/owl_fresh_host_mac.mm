@@ -9,12 +9,12 @@
 #include <utility>
 #include <vector>
 
+#include "base/command_line.h"
 #include "base/containers/span.h"
 #include "base/files/file_path.h"
 #include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/memory/weak_ptr.h"
-#include "base/command_line.h"
 #include "base/process/process.h"
 #include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
@@ -22,21 +22,22 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
+#include "components/input/native_web_keyboard_event.h"
+#include "components/input/render_widget_host_input_event_router.h"
 #include "components/viz/common/frame_sinks/copy_output_result.h"
 #include "components/viz/host/client_frame_sink_video_capturer.h"
-#include "components/input/render_widget_host_input_event_router.h"
 #include "content/browser/devtools/devtools_video_consumer.h"
-#include "content/browser/renderer_host/render_widget_host_impl.h"
+#include "content/browser/renderer_host/owl_fresh_web_contents_role.h"
 #include "content/browser/renderer_host/popup_menu_helper_mac.h"
+#include "content/browser/renderer_host/render_widget_host_impl.h"
 #include "content/browser/renderer_host/render_widget_host_view_base.h"
 #include "content/browser/web_contents/web_contents_impl.h"
-#include "components/input/native_web_keyboard_event.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/file_select_listener.h"
-#include "content/public/browser/render_frame_host.h"
-#include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/navigation_controller.h"
+#include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_widget_host.h"
+#include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/web_contents.h"
 #include "content/shell/browser/shell.h"
 #include "content/shell/browser/shell_devtools_frontend.h"
@@ -47,19 +48,18 @@
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
-#include "content/browser/renderer_host/owl_fresh_web_contents_role.h"
-#include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
-#include "third_party/blink/public/mojom/choosers/file_chooser.mojom.h"
 #include "third_party/blink/public/common/input/web_mouse_event.h"
 #include "third_party/blink/public/common/input/web_mouse_wheel_event.h"
+#include "third_party/blink/public/mojom/choosers/file_chooser.mojom.h"
+#include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/accelerated_widget_mac/owl_fresh_context.h"
+#include "ui/base/cocoa/remote_layer_api.h"
 #include "ui/gfx/codec/png_codec.h"
-#include "ui/gfx/image/image.h"
-#include "ui/gfx/native_ui_types.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
-#include "ui/base/cocoa/remote_layer_api.h"
+#include "ui/gfx/image/image.h"
+#include "ui/gfx/native_ui_types.h"
 #include "ui/snapshot/snapshot.h"
 #include "url/gurl.h"
 
@@ -85,8 +85,7 @@ OwlFreshPendingFilePicker& ActiveFilePicker() {
   return *picker;
 }
 
-bool OwlFreshSelectActiveFilePickerFiles(
-    const std::vector<std::string>& paths);
+bool OwlFreshSelectActiveFilePickerFiles(const std::vector<std::string>& paths);
 bool OwlFreshCancelActiveFilePicker();
 
 Shell* CurrentShell() {
@@ -110,8 +109,7 @@ WebContents* CurrentWebContents() {
   return shell ? shell->web_contents() : nullptr;
 }
 
-std::string FilePickerModeToString(
-    blink::mojom::FileChooserParams::Mode mode) {
+std::string FilePickerModeToString(blink::mojom::FileChooserParams::Mode mode) {
   switch (mode) {
     case blink::mojom::FileChooserParams::Mode::kOpen:
       return "open";
@@ -223,25 +221,87 @@ mojom::OwlFreshCaptureResultPtr CaptureError(const std::string& message) {
   return result;
 }
 
+struct OwlFreshDevToolsDockBounds {
+  gfx::Rect web_bounds;
+  gfx::Rect devtools_bounds;
+};
+
+int ClampOwlFreshDockSize(int value, int lower, int upper) {
+  return std::min(std::max(value, lower), upper);
+}
+
+OwlFreshDevToolsDockBounds ComputeOwlFreshDevToolsDockBounds(
+    mojom::OwlFreshDevToolsMode mode,
+    int width,
+    int height) {
+  constexpr int kMinimumWebContentWidth = 420;
+  constexpr int kMinimumWebContentHeight = 320;
+  constexpr int kMinimumSideDevToolsWidth = 480;
+  constexpr int kPreferredSideDevToolsWidth = 520;
+  constexpr int kMaximumSideDevToolsWidth = 720;
+  constexpr int kMinimumBottomDevToolsHeight = 280;
+  constexpr int kPreferredBottomDevToolsHeight = 320;
+  constexpr int kMaximumBottomDevToolsHeight = 420;
+
+  OwlFreshDevToolsDockBounds bounds = {
+      gfx::Rect(0, 0, width, height),
+      gfx::Rect(0, 0, width, height),
+  };
+
+  const int side_width_upper = std::min(
+      kMaximumSideDevToolsWidth, std::max(1, width - kMinimumWebContentWidth));
+  const int side_width_lower =
+      std::min(kMinimumSideDevToolsWidth, side_width_upper);
+  const int side_width =
+      ClampOwlFreshDockSize(std::max(kPreferredSideDevToolsWidth, width / 2),
+                            side_width_lower, side_width_upper);
+
+  const int bottom_height_upper =
+      std::min(kMaximumBottomDevToolsHeight,
+               std::max(1, height - kMinimumWebContentHeight));
+  const int bottom_height_lower =
+      std::min(kMinimumBottomDevToolsHeight, bottom_height_upper);
+  const int bottom_height = ClampOwlFreshDockSize(
+      kPreferredBottomDevToolsHeight, bottom_height_lower, bottom_height_upper);
+
+  switch (mode) {
+    case mojom::OwlFreshDevToolsMode::kBottom:
+      bounds.web_bounds =
+          gfx::Rect(0, bottom_height, width, height - bottom_height);
+      bounds.devtools_bounds = gfx::Rect(0, 0, width, bottom_height);
+      break;
+    case mojom::OwlFreshDevToolsMode::kRight:
+      bounds.web_bounds = gfx::Rect(0, 0, width - side_width, height);
+      bounds.devtools_bounds =
+          gfx::Rect(width - side_width, 0, side_width, height);
+      break;
+    case mojom::OwlFreshDevToolsMode::kLeft:
+      bounds.web_bounds = gfx::Rect(side_width, 0, width - side_width, height);
+      bounds.devtools_bounds = gfx::Rect(0, 0, side_width, height);
+      break;
+    case mojom::OwlFreshDevToolsMode::kWindow:
+      break;
+  }
+  return bounds;
+}
+
 std::string CaptureState(WebContents* contents, RenderWidgetHostView* view) {
   std::string url = contents ? contents->GetLastCommittedURL().spec() : "";
   gfx::Rect bounds = view ? view->GetViewBounds() : gfx::Rect();
   NSWindow* window = CurrentWindow();
   RenderWidgetHost* render_host = CurrentRenderWidgetHost();
-  int host_hidden = render_host
-                        ? static_cast<RenderWidgetHostImpl*>(render_host)
-                              ->IsHidden()
-                        : -1;
+  int host_hidden =
+      render_host ? static_cast<RenderWidgetHostImpl*>(render_host)->IsHidden()
+                  : -1;
   return base::StringPrintf(
       "url=%s loading=%d view_showing=%d surface_available=%d bounds=%s "
       "context_id=%u web_contents_visibility=%d host_hidden=%d "
       "window_visible=%d window_alpha=%.3f",
       url.c_str(), contents ? contents->IsLoading() : 0,
       view ? view->IsShowing() : 0,
-      view ? view->IsSurfaceAvailableForCopy() : 0,
-      bounds.ToString().c_str(), ui::OwlFreshLatestContextID(),
-      contents ? static_cast<int>(contents->GetVisibility()) : -1,
-      host_hidden,
+      view ? view->IsSurfaceAvailableForCopy() : 0, bounds.ToString().c_str(),
+      ui::OwlFreshLatestContextID(),
+      contents ? static_cast<int>(contents->GetVisibility()) : -1, host_hidden,
       window ? [window isVisible] : 0, window ? [window alphaValue] : 0.0);
 }
 
@@ -266,25 +326,24 @@ mojom::OwlFreshCaptureResultPtr CaptureAppKitViewSnapshot(
 
   NSBitmapImageRep* rep = [view bitmapImageRepForCachingDisplayInRect:bounds];
   if (!rep) {
-    return CaptureError(base::StrCat(
-        {"bitmapImageRepForCachingDisplayInRect returned nil (", capture_state,
-         ")"}));
+    return CaptureError(
+        base::StrCat({"bitmapImageRepForCachingDisplayInRect returned nil (",
+                      capture_state, ")"}));
   }
   [view cacheDisplayInRect:bounds toBitmapImageRep:rep];
   NSData* data = [rep representationUsingType:NSBitmapImageFileTypePNG
                                    properties:@{}];
   if (!data || data.length == 0) {
-    return CaptureError(
-        base::StrCat({"AppKit snapshot returned empty PNG data (",
-                      capture_state, ")"}));
+    return CaptureError(base::StrCat(
+        {"AppKit snapshot returned empty PNG data (", capture_state, ")"}));
   }
 
   auto result = mojom::OwlFreshCaptureResult::New();
   result->png.resize(static_cast<size_t>(data.length));
   const uint8_t* bytes = static_cast<const uint8_t*>(data.bytes);
   UNSAFE_BUFFERS(base::span(result->png))
-      .copy_from(UNSAFE_BUFFERS(base::span<const uint8_t>(
-          bytes, static_cast<size_t>(data.length))));
+      .copy_from(UNSAFE_BUFFERS(
+          base::span<const uint8_t>(bytes, static_cast<size_t>(data.length))));
   result->width = static_cast<uint32_t>(rep.pixelsWide);
   result->height = static_cast<uint32_t>(rep.pixelsHigh);
   result->capture_mode = "mojo-appkit-cache-display";
@@ -379,9 +438,8 @@ class OwlFreshVideoCapture final : public viz::mojom::FrameSinkVideoConsumer {
       return;
     }
     base::span<const uint8_t> mapping_memory(mapping);
-    if (mapping_memory.size() <
-        media::VideoFrame::AllocationSize(info->pixel_format,
-                                          info->coded_size)) {
+    if (mapping_memory.size() < media::VideoFrame::AllocationSize(
+                                    info->pixel_format, info->coded_size)) {
       FinishError("video capture shared-memory frame was too small");
       return;
     }
@@ -403,7 +461,8 @@ class OwlFreshVideoCapture final : public viz::mojom::FrameSinkVideoConsumer {
     std::move(callback).Run(std::move(bitmap));
   }
 
-  void OnNewCaptureVersion(const media::CaptureVersion& capture_version) override {}
+  void OnNewCaptureVersion(
+      const media::CaptureVersion& capture_version) override {}
   void OnFrameWithEmptyRegionCapture() override {}
   void OnStopped() override {}
   void OnLog(const std::string& message) override {}
@@ -566,9 +625,10 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
 
   void GetPath(GetPathCallback callback) override {
     WebContents* contents = CurrentWebContents();
-    BrowserContext* context = contents ? contents->GetBrowserContext() : nullptr;
-    std::move(callback).Run(
-        context ? context->GetPath().AsUTF8Unsafe() : std::string());
+    BrowserContext* context =
+        contents ? contents->GetBrowserContext() : nullptr;
+    std::move(callback).Run(context ? context->GetPath().AsUTF8Unsafe()
+                                    : std::string());
   }
 
   void Navigate(const std::string& url) override {
@@ -664,8 +724,8 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     base::TimeTicks now = base::TimeTicks::Now();
 
     if (event->kind == mojom::OwlFreshMouseKind::kWheel) {
-      blink::WebMouseWheelEvent wheel(
-          blink::WebInputEvent::Type::kMouseWheel, modifiers, now);
+      blink::WebMouseWheelEvent wheel(blink::WebInputEvent::Type::kMouseWheel,
+                                      modifiers, now);
       wheel.SetPositionInWidget(event->x, event->y);
       wheel.SetPositionInScreen(event->x, event->y);
       wheel.delta_x = event->delta_x;
@@ -674,7 +734,8 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
       wheel.wheel_ticks_y = event->delta_y / 100.0f;
       wheel.delta_units = ui::ScrollGranularity::kScrollByPrecisePixel;
       wheel.dispatch_type = blink::WebInputEvent::DispatchType::kBlocking;
-      wheel.event_action = blink::WebMouseWheelEvent::EventAction::kScrollVertical;
+      wheel.event_action =
+          blink::WebMouseWheelEvent::EventAction::kScrollVertical;
       wheel.phase = blink::WebMouseWheelEvent::kPhaseBegan;
       web_contents_impl->GetInputEventRouter()->RouteMouseWheelEvent(
           view_base, &wheel, ui::LatencyInfo());
@@ -715,10 +776,9 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     mouse.SetPositionInWidget(event->x, event->y);
     gfx::Rect offset = contents->GetContainerBounds();
     mouse.SetPositionInScreen(event->x + offset.x(), event->y + offset.y());
-    mouse.button =
-        type == blink::WebInputEvent::Type::kMouseMove
-            ? blink::WebPointerProperties::Button::kNoButton
-            : button;
+    mouse.button = type == blink::WebInputEvent::Type::kMouseMove
+                       ? blink::WebPointerProperties::Button::kNoButton
+                       : button;
     mouse.click_count = event->click_count > 0 ? event->click_count : 1;
     web_contents_impl->GetInputEventRouter()->RouteMouseEvent(
         view_base, &mouse, ui::LatencyInfo());
@@ -887,7 +947,8 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     std::move(callback).Run(ok);
   }
 
-  void CancelActiveFilePicker(CancelActiveFilePickerCallback callback) override {
+  void CancelActiveFilePicker(
+      CancelActiveFilePickerCallback callback) override {
     const bool ok = OwlFreshCancelActiveFilePicker();
     ui::OwlFreshClearNativeFilePickerSurfaces();
     if (client_) {
@@ -895,7 +956,6 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     }
     std::move(callback).Run(ok);
   }
-
 
   void OpenDevTools(mojom::OwlFreshDevToolsMode mode,
                     OpenDevToolsCallback callback) override {
@@ -948,42 +1008,27 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     owl_fresh::MarkDevToolsFrontend(devtools_contents);
 
     gfx::Rect inspected_bounds = inspected_contents->GetContainerBounds();
-    const int width = std::max({requested_size_.width(), inspected_bounds.width(), 800});
-    const int height = std::max({requested_size_.height(), inspected_bounds.height(), 600});
-    const int bottom_height = std::min(280, std::max(1, height - 240));
-    const int side_width = std::min(360, std::max(1, width - 320));
-    gfx::Rect web_bounds(0, 0, width, height);
-    gfx::Rect devtools_bounds(0, 0, width, height);
-    switch (mode) {
-      case mojom::OwlFreshDevToolsMode::kBottom:
-        web_bounds = gfx::Rect(0, bottom_height, width, height - bottom_height);
-        devtools_bounds = gfx::Rect(0, 0, width, bottom_height);
-        break;
-      case mojom::OwlFreshDevToolsMode::kRight:
-        web_bounds = gfx::Rect(0, 0, width - side_width, height);
-        devtools_bounds = gfx::Rect(width - side_width, 0, side_width, height);
-        break;
-      case mojom::OwlFreshDevToolsMode::kLeft:
-        web_bounds = gfx::Rect(side_width, 0, width - side_width, height);
-        devtools_bounds = gfx::Rect(0, 0, side_width, height);
-        break;
-      case mojom::OwlFreshDevToolsMode::kWindow:
-        web_bounds = gfx::Rect(0, 0, width, height);
-        devtools_bounds = gfx::Rect(0, 0, width, height);
-        break;
-    }
+    const int width =
+        std::max({requested_size_.width(), inspected_bounds.width(), 800});
+    const int height =
+        std::max({requested_size_.height(), inspected_bounds.height(), 600});
+    const OwlFreshDevToolsDockBounds dock_bounds =
+        ComputeOwlFreshDevToolsDockBounds(mode, width, height);
+    const gfx::Rect web_bounds = dock_bounds.web_bounds;
+    const gfx::Rect devtools_bounds = dock_bounds.devtools_bounds;
     shell->ResizeWebContentForTests(web_bounds.size());
     devtools_frontend_->frontend_shell()->ResizeWebContentForTests(
         devtools_bounds.size());
     ui::OwlFreshSetDevToolsDockLayout(
         label,
-        CGRectMake(web_bounds.x(), web_bounds.y(), web_bounds.width(), web_bounds.height()),
-        CGRectMake(devtools_bounds.x(), devtools_bounds.y(), devtools_bounds.width(), devtools_bounds.height()));
+        CGRectMake(web_bounds.x(), web_bounds.y(), web_bounds.width(),
+                   web_bounds.height()),
+        CGRectMake(devtools_bounds.x(), devtools_bounds.y(),
+                   devtools_bounds.width(), devtools_bounds.height()));
     EnsureWebContentsProducingFrames(inspected_contents);
     EnsureWebContentsProducingFrames(devtools_contents);
-    devtools_frontend_->InspectElementAt(
-        std::max(1, web_bounds.width() / 2),
-        std::max(1, web_bounds.height() / 2));
+    devtools_frontend_->InspectElementAt(std::max(1, web_bounds.width() / 2),
+                                         std::max(1, web_bounds.height() / 2));
     devtools_contents->Focus();
     PublishCompositorWithRetry(60);
     Log(base::StrCat({"DevTools opened label=", label}));
@@ -1053,8 +1098,7 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
       view->WasUnOccluded();
       view->EnsureSurfaceSynchronizedForWebTest();
     }
-    if (RenderWidgetHost* host =
-            view ? view->GetRenderWidgetHost() : nullptr) {
+    if (RenderWidgetHost* host = view ? view->GetRenderWidgetHost() : nullptr) {
       auto* host_impl = static_cast<RenderWidgetHostImpl*>(host);
       if (host_impl->IsHidden()) {
         host_impl->WasShown(std::nullopt);
@@ -1065,12 +1109,12 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     }
   }
 
-  void CopyText(const std::string& text,
-                input::NativeWebKeyboardEvent* event) {
-    size_t n = std::min(text.size(), blink::WebKeyboardEvent::kTextLengthCap - 1);
+  void CopyText(const std::string& text, input::NativeWebKeyboardEvent* event) {
+    size_t n =
+        std::min(text.size(), blink::WebKeyboardEvent::kTextLengthCap - 1);
     for (size_t i = 0; i < n; ++i) {
-      event->text[i] = static_cast<char16_t>(
-          static_cast<unsigned char>(text[i]));
+      event->text[i] =
+          static_cast<char16_t>(static_cast<unsigned char>(text[i]));
       event->unmodified_text[i] = event->text[i];
     }
     event->text[n] = 0;
@@ -1127,10 +1171,7 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
                                       blue:0.972
                                      alpha:1.0] CGColor];
 
-      auto add_block = [&](CGFloat x,
-                           CGFloat y,
-                           CGFloat width,
-                           CGFloat height,
+      auto add_block = [&](CGFloat x, CGFloat y, CGFloat width, CGFloat height,
                            NSColor* color) {
         CALayer* layer = [[CALayer alloc] init];
         layer.anchorPoint = CGPointZero;
@@ -1139,19 +1180,18 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
         [fixture_root_ addSublayer:layer];
         return layer;
       };
-      fixture_input_layer_ =
-          add_block(48, 56, 244, 148, [NSColor colorWithCalibratedRed:1
-                                                                green:0
-                                                                 blue:0
-                                                                alpha:1]);
-      add_block(288, 56, 180, 140, [NSColor colorWithCalibratedRed:0
-                                                             green:0.8
-                                                              blue:0.267
-                                                             alpha:1]);
-      add_block(528, 56, 180, 140, [NSColor colorWithCalibratedRed:0
-                                                             green:0.349
-                                                              blue:1
-                                                             alpha:1]);
+      fixture_input_layer_ = add_block(48, 56, 244, 148,
+                                       [NSColor colorWithCalibratedRed:1
+                                                                 green:0
+                                                                  blue:0
+                                                                 alpha:1]);
+      add_block(288, 56, 180, 140,
+                [NSColor colorWithCalibratedRed:0
+                                          green:0.8
+                                           blue:0.267
+                                          alpha:1]);
+      add_block(528, 56, 180, 140,
+                [NSColor colorWithCalibratedRed:0 green:0.349 blue:1 alpha:1]);
 
       CATextLayer* text = [CATextLayer layer];
       text.anchorPoint = CGPointZero;
@@ -1166,10 +1206,11 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
       [fixture_root_ addSublayer:text];
       fixture_text_layer_ = text;
 
-      if ([CAContext respondsToSelector:@selector(contextWithCGSConnection:options:)]) {
+      if ([CAContext respondsToSelector:@selector(contextWithCGSConnection:
+                                                                   options:)]) {
         CGSConnectionID connection = CGSMainConnectionID();
-        fixture_context_ =
-            [CAContext contextWithCGSConnection:connection options:@{}];
+        fixture_context_ = [CAContext contextWithCGSConnection:connection
+                                                       options:@{}];
       } else {
         fixture_context_ = [CAContext remoteContextWithOptions:@{}];
       }
@@ -1185,9 +1226,7 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     }
     EnsureLayerFixtureContext();
     fixture_input_layer_.backgroundColor =
-        [[NSColor colorWithCalibratedRed:1.0
-                                   green:0.824
-                                    blue:0.0
+        [[NSColor colorWithCalibratedRed:1.0 green:0.824 blue:0.0
                                    alpha:1.0] CGColor];
     fixture_text_layer_.string = @"OWL_INPUT_CLICKED";
     [fixture_input_layer_ setNeedsDisplay];
@@ -1214,9 +1253,9 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     pending_capture_mode_.clear();
 
     if (!copy_result.has_value()) {
-      std::move(callback).Run(CaptureError(base::StrCat(
-          {CopyFromSurfaceErrorToString(copy_result.error()), " (",
-           capture_state, ")"})));
+      std::move(callback).Run(CaptureError(
+          base::StrCat({CopyFromSurfaceErrorToString(copy_result.error()), " (",
+                        capture_state, ")"})));
       return;
     }
 
@@ -1253,17 +1292,17 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     std::string capture_mode = std::exchange(pending_capture_mode_, "");
 
     if (image.IsEmpty()) {
-      std::move(callback).Run(CaptureError(base::StrCat(
-          {"GetSnapshotFromBrowser returned an empty image (", capture_state,
-           ")"})));
+      std::move(callback).Run(CaptureError(
+          base::StrCat({"GetSnapshotFromBrowser returned an empty image (",
+                        capture_state, ")"})));
       return;
     }
 
     SkBitmap bitmap = image.AsBitmap();
     if (bitmap.drawsNothing()) {
-      std::move(callback).Run(CaptureError(base::StrCat(
-          {"GetSnapshotFromBrowser returned no pixels (", capture_state,
-           ")"})));
+      std::move(callback).Run(CaptureError(
+          base::StrCat({"GetSnapshotFromBrowser returned no pixels (",
+                        capture_state, ")"})));
       return;
     }
 
@@ -1294,9 +1333,9 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     std::string capture_mode = std::exchange(pending_capture_mode_, "");
 
     if (bitmap.drawsNothing()) {
-      std::move(callback).Run(CaptureError(base::StrCat(
-          {"FrameSinkVideoCapturer returned no pixels (", capture_state,
-           ")"})));
+      std::move(callback).Run(CaptureError(
+          base::StrCat({"FrameSinkVideoCapturer returned no pixels (",
+                        capture_state, ")"})));
       return;
     }
 
@@ -1325,8 +1364,8 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     CaptureSurfaceCallback callback = std::move(pending_capture_callback_);
     std::string capture_state = std::exchange(pending_capture_state_, "");
     pending_capture_mode_.clear();
-    std::move(callback).Run(CaptureError(
-        base::StrCat({message, " (", capture_state, ")"})));
+    std::move(callback).Run(
+        CaptureError(base::StrCat({message, " (", capture_state, ")"})));
   }
 
   void OnGrabViewSnapshot(const gfx::Image& image) {
@@ -1353,9 +1392,9 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     std::string capture_state = std::exchange(pending_capture_state_, "");
     pending_capture_mode_.clear();
     video_capture_.reset();
-    std::move(callback).Run(CaptureError(base::StrCat(
-        {"capture did not call back before host timeout (",
-         capture_state, ")"})));
+    std::move(callback).Run(CaptureError(
+        base::StrCat({"capture did not call back before host timeout (",
+                      capture_state, ")"})));
   }
 
   mojo::Remote<mojom::OwlFreshClient> client_;
@@ -1390,9 +1429,9 @@ bool OwlFreshSelectActiveFilePickerFiles(
   for (const std::string& path : paths) {
     base::FilePath file_path(path);
     files.push_back(blink::mojom::FileChooserFileInfo::NewNativeFile(
-        blink::mojom::NativeFileInfo::New(
-            file_path, file_path.BaseName().AsUTF16Unsafe(),
-            std::vector<std::u16string>())));
+        blink::mojom::NativeFileInfo::New(file_path,
+                                          file_path.BaseName().AsUTF16Unsafe(),
+                                          std::vector<std::u16string>())));
   }
 
   scoped_refptr<FileSelectListener> listener = std::move(pending.listener);
@@ -1412,7 +1451,6 @@ bool OwlFreshCancelActiveFilePicker() {
   listener->FileSelectionCanceled();
   return true;
 }
-
 
 }  // namespace
 
@@ -1438,12 +1476,13 @@ bool OwlFreshMaybeRunFileChooser(
 
   ui::OwlFreshPublishNativeFilePickerSurface(
       pending.surface_key, 0, FilePickerSurfaceBounds(),
-      [NSScreen mainScreen].backingScaleFactor, FilePickerModeToString(params.mode),
-      AcceptTypesToUTF8(params.accept_types), FilePickerAllowsMultiple(params.mode),
+      [NSScreen mainScreen].backingScaleFactor,
+      FilePickerModeToString(params.mode),
+      AcceptTypesToUTF8(params.accept_types),
+      FilePickerAllowsMultiple(params.mode),
       FilePickerUploadsFolder(params.mode), "file-picker");
   return true;
 }
-
 
 void BindOwlFreshSessionForCurrentShell(
     mojo::PendingReceiver<mojom::OwlFreshSession> receiver) {
