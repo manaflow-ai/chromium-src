@@ -1,14 +1,14 @@
 #include "ui/accelerated_widget_mac/owl_fresh_context.h"
 
+#import <CoreImage/CoreImage.h>
+#import <IOSurface/IOSurface.h>
+#import <QuartzCore/QuartzCore.h>
+
 #include <algorithm>
 #include <atomic>
 #include <map>
 #include <string>
 #include <utility>
-
-#import <CoreImage/CoreImage.h>
-#import <IOSurface/IOSurface.h>
-#import <QuartzCore/QuartzCore.h>
 
 #include "base/no_destructor.h"
 #include "ui/base/cocoa/remote_layer_api.h"
@@ -186,8 +186,8 @@ uint64_t StableIDForKey(uint64_t surface_key) {
 }  // namespace
 
 OwlFreshNativeMenuItem::OwlFreshNativeMenuItem() = default;
-OwlFreshNativeMenuItem::OwlFreshNativeMenuItem(
-    const OwlFreshNativeMenuItem&) = default;
+OwlFreshNativeMenuItem::OwlFreshNativeMenuItem(const OwlFreshNativeMenuItem&) =
+    default;
 OwlFreshNativeMenuItem& OwlFreshNativeMenuItem::operator=(
     const OwlFreshNativeMenuItem&) = default;
 OwlFreshNativeMenuItem::~OwlFreshNativeMenuItem() = default;
@@ -258,8 +258,24 @@ void OwlFreshClearDevToolsDockLayout() {
 
 std::vector<OwlFreshSurfaceSnapshot> OwlFreshSurfaceTreeSnapshot() {
   std::vector<OwlFreshSurfaceSnapshot> snapshots;
+  const OwlFreshDevToolsDockLayout& layout = DevToolsDockLayoutStorage();
+  uint64_t active_devtools_surface_key = 0;
+  if (layout.active) {
+    uint32_t active_context_id = 0;
+    for (const auto& [key, record] : SurfaceRecords()) {
+      if (record.visible && record.kind == OwlFreshSurfaceKind::kDevTools &&
+          record.context_id >= active_context_id) {
+        active_context_id = record.context_id;
+        active_devtools_surface_key = key;
+      }
+    }
+  }
   for (const auto& [key, record] : SurfaceRecords()) {
     if (!record.visible) {
+      continue;
+    }
+    if (layout.active && record.kind == OwlFreshSurfaceKind::kDevTools &&
+        key != active_devtools_surface_key) {
       continue;
     }
     OwlFreshSurfaceSnapshot snapshot;
@@ -268,11 +284,9 @@ std::vector<OwlFreshSurfaceSnapshot> OwlFreshSurfaceTreeSnapshot() {
     snapshot.kind = record.kind;
     snapshot.context_id = record.context_id;
     CGRect snapshot_bounds = record.bounds;
-    const OwlFreshDevToolsDockLayout& layout = DevToolsDockLayoutStorage();
     if (layout.active && record.kind == OwlFreshSurfaceKind::kWebView) {
       snapshot_bounds = layout.web_bounds;
-    } else if (layout.active && record.kind == OwlFreshSurfaceKind::kDevTools &&
-               record.label == layout.label) {
+    } else if (layout.active && record.kind == OwlFreshSurfaceKind::kDevTools) {
       snapshot_bounds = layout.devtools_bounds;
     }
     snapshot.bounds = NormalizedFrame(snapshot_bounds);
@@ -288,7 +302,10 @@ std::vector<OwlFreshSurfaceSnapshot> OwlFreshSurfaceTreeSnapshot() {
     snapshot.file_picker_accept_types = record.file_picker_accept_types;
     snapshot.file_picker_allows_multiple = record.file_picker_allows_multiple;
     snapshot.file_picker_upload_folder = record.file_picker_upload_folder;
-    snapshot.label = record.label;
+    snapshot.label =
+        layout.active && record.kind == OwlFreshSurfaceKind::kDevTools
+            ? layout.label
+            : record.label;
     snapshots.push_back(std::move(snapshot));
   }
   std::stable_sort(snapshots.begin(), snapshots.end(),
@@ -476,7 +493,8 @@ void OwlFreshClearNativeMenuSurfaces() {
 void OwlFreshClearNativeFilePickerSurfaces() {
   bool changed = false;
   for (auto& [key, record] : SurfaceRecords()) {
-    if (record.kind == OwlFreshSurfaceKind::kNativeFilePicker && record.visible) {
+    if (record.kind == OwlFreshSurfaceKind::kNativeFilePicker &&
+        record.visible) {
       record.visible = false;
       changed = true;
     }
@@ -507,8 +525,8 @@ void OwlFreshDisplayPortalPresentIOSurface(IOSurfaceRef io_surface,
   CIImage* ci_image = [CIImage imageWithIOSurface:io_surface];
   CGRect image_rect = CGRectMake(0, 0, IOSurfaceGetWidth(io_surface),
                                  IOSurfaceGetHeight(io_surface));
-  CGImageRef image =
-      [portal.image_context createCGImage:ci_image fromRect:image_rect];
+  CGImageRef image = [portal.image_context createCGImage:ci_image
+                                                fromRect:image_rect];
   if (image) {
     portal.image_layer.contents = (__bridge id)image;
     CGImageRelease(image);

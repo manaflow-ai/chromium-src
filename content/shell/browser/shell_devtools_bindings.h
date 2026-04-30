@@ -43,6 +43,7 @@ class ShellDevToolsBindings : public WebContentsObserver,
 
   void InspectElementAt(int x, int y);
   virtual void Attach();
+  void Detach();
 
   void CallClientFunction(
       const std::string& object_name,

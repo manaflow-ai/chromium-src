@@ -242,11 +242,16 @@ void ShellDevToolsBindings::Attach() {
   AttachInternal();
 }
 
-void ShellDevToolsBindings::WebContentsDestroyed() {
-  if (agent_host_) {
-    agent_host_->DetachClient(this);
-    agent_host_ = nullptr;
+void ShellDevToolsBindings::Detach() {
+  if (!agent_host_) {
+    return;
   }
+  agent_host_->DetachClient(this);
+  agent_host_ = nullptr;
+}
+
+void ShellDevToolsBindings::WebContentsDestroyed() {
+  Detach();
 }
 
 void ShellDevToolsBindings::HandleMessageFromDevToolsFrontend(
@@ -360,10 +365,13 @@ void ShellDevToolsBindings::HandleMessageFromDevToolsFrontend(
     CallClientFunction("DevToolsAPI", "fileSystemsLoaded",
                        base::Value(base::Value::Type::LIST));
   } else if (*method == "reattach") {
-    if (!agent_host_)
-      return;
-    agent_host_->DetachClient(this);
-    agent_host_->AttachClient(this);
+    // Chrome's DevToolsWindow reattach path carries browser-window state that
+    // content_shell does not model. The OWL host keeps this binding attached
+    // while moving the same frontend between native containers, so rebinding
+    // the same client only asks Blink to bind LocalFrame twice.
+    if (!agent_host_) {
+      AttachInternal();
+    }
   } else if (*method == "registerExtensionsAPI") {
     if (params.size() < 2)
       return;

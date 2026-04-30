@@ -234,10 +234,10 @@ OwlFreshDevToolsDockBounds ComputeOwlFreshDevToolsDockBounds(
     mojom::OwlFreshDevToolsMode mode,
     int width,
     int height) {
-  constexpr int kMinimumWebContentWidth = 420;
+  constexpr int kMinimumWebContentWidth = 320;
   constexpr int kMinimumWebContentHeight = 320;
-  constexpr int kMinimumSideDevToolsWidth = 480;
-  constexpr int kPreferredSideDevToolsWidth = 520;
+  constexpr int kMinimumSideDevToolsWidth = 720;
+  constexpr int kPreferredSideDevToolsWidth = 720;
   constexpr int kMaximumSideDevToolsWidth = 720;
   constexpr int kMinimumBottomDevToolsHeight = 280;
   constexpr int kPreferredBottomDevToolsHeight = 320;
@@ -967,28 +967,28 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     }
 
     std::string label = "devtools-bottom";
-    std::string dock_state = "bottom";
+    // OWL owns the native dock layout. Keep the DevTools frontend itself
+    // undocked so it fills the DevTools surface instead of reserving inspected
+    // page space inside its own WebContents.
+    std::string dock_state = "undocked";
     switch (mode) {
       case mojom::OwlFreshDevToolsMode::kBottom:
         label = "devtools-bottom";
-        dock_state = "bottom";
         break;
       case mojom::OwlFreshDevToolsMode::kRight:
         label = "devtools-right";
-        dock_state = "right";
         break;
       case mojom::OwlFreshDevToolsMode::kLeft:
         label = "devtools-left";
-        dock_state = "left";
         break;
       case mojom::OwlFreshDevToolsMode::kWindow:
         label = "devtools-window";
-        dock_state = "undocked";
         break;
     }
     ui::OwlFreshSetDevToolsSurfaceLabel(label);
 
-    if (!devtools_frontend_) {
+    const bool created_devtools_frontend = !devtools_frontend_;
+    if (created_devtools_frontend) {
       ShellDevToolsFrontend* frontend =
           ShellDevToolsFrontend::Show(shell->web_contents(), dock_state);
       devtools_frontend_ = frontend->GetWeakPtr();
@@ -1027,8 +1027,10 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
                    devtools_bounds.width(), devtools_bounds.height()));
     EnsureWebContentsProducingFrames(inspected_contents);
     EnsureWebContentsProducingFrames(devtools_contents);
-    devtools_frontend_->InspectElementAt(std::max(1, web_bounds.width() / 2),
-                                         std::max(1, web_bounds.height() / 2));
+    if (created_devtools_frontend) {
+      devtools_frontend_->InspectElementAt(std::max(1, web_bounds.width() / 2),
+                                           std::max(1, web_bounds.height() / 2));
+    }
     devtools_contents->Focus();
     PublishCompositorWithRetry(60);
     Log(base::StrCat({"DevTools opened label=", label}));

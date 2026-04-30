@@ -57,6 +57,7 @@ void ShellDevToolsFrontend::InspectElementAt(int x, int y) {
 }
 
 void ShellDevToolsFrontend::Close() {
+  devtools_bindings_->Detach();
   frontend_shell_->Close();
 }
 
