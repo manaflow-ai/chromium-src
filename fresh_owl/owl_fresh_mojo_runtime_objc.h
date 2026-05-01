@@ -12,6 +12,7 @@ typedef void (^OwlFreshMojoRuntimeEventHandler)(NSInteger kind,
 
 @protocol OwlFreshMojoRuntimeSessionBridge <NSObject>
 @property(nonatomic, readonly) int32_t hostPID;
+@property(nonatomic, readonly) uint64_t owlSessionRemoteHandle;
 
 - (void)destroy;
 - (BOOL)setClientWithHandle:(uint64_t)handle

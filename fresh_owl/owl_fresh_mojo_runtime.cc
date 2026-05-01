@@ -360,12 +360,16 @@ int owl_fresh_mojo_global_init(void) {
   return 0;
 }
 
-OwlFreshMojoSession* owl_fresh_mojo_session_create(
+OwlFreshMojoSession* CreateSession(
     const char* content_shell_path,
     const char* initial_url,
     const char* user_data_dir,
     OwlFreshMojoEventCallback callback,
-    void* user_data) {
+    void* user_data,
+    uint64_t* session_remote_handle) {
+  if (session_remote_handle) {
+    *session_remote_handle = 0;
+  }
   if (!GetGlobal().initialized || !content_shell_path || !*content_shell_path) {
     return nullptr;
   }
@@ -432,8 +436,16 @@ OwlFreshMojoSession* owl_fresh_mojo_session_create(
                                  session->process.Handle(),
                                  channel.TakeLocalEndpoint());
 
-  session->controller->BindOwlFreshSession(
-      session->owl_session.BindNewPipeAndPassReceiver());
+  if (session_remote_handle) {
+    mojo::MessagePipe pipe;
+    *session_remote_handle = pipe.handle0.release().value();
+    session->controller->BindOwlFreshSession(
+        mojo::PendingReceiver<content::mojom::OwlFreshSession>(
+            std::move(pipe.handle1)));
+  } else {
+    session->controller->BindOwlFreshSession(
+        session->owl_session.BindNewPipeAndPassReceiver());
+  }
 
   session->controller.set_disconnect_handler(base::BindRepeating(
       [](OwlFreshMojoSession* session) {
@@ -442,15 +454,38 @@ OwlFreshMojoSession* owl_fresh_mojo_session_create(
         Emit(session->callback, session->user_data, event);
       },
       session.get()));
-  session->owl_session.set_disconnect_handler(base::BindRepeating(
-      [](OwlFreshMojoSession* session) {
-        OwlFreshMojoEvent event = {};
-        event.kind = kOwlFreshMojoEventDisconnected;
-        Emit(session->callback, session->user_data, event);
-      },
-      session.get()));
+  if (!session_remote_handle) {
+    session->owl_session.set_disconnect_handler(base::BindRepeating(
+        [](OwlFreshMojoSession* session) {
+          OwlFreshMojoEvent event = {};
+          event.kind = kOwlFreshMojoEventDisconnected;
+          Emit(session->callback, session->user_data, event);
+        },
+        session.get()));
+  }
 
   return session.release();
+}
+
+OwlFreshMojoSession* owl_fresh_mojo_session_create(
+    const char* content_shell_path,
+    const char* initial_url,
+    const char* user_data_dir,
+    OwlFreshMojoEventCallback callback,
+    void* user_data) {
+  return CreateSession(content_shell_path, initial_url, user_data_dir, callback,
+                       user_data, nullptr);
+}
+
+OwlFreshMojoSession* owl_fresh_mojo_session_create_with_session_remote(
+    const char* content_shell_path,
+    const char* initial_url,
+    const char* user_data_dir,
+    OwlFreshMojoEventCallback callback,
+    void* user_data,
+    uint64_t* session_remote_handle) {
+  return CreateSession(content_shell_path, initial_url, user_data_dir, callback,
+                       user_data, session_remote_handle);
 }
 
 void owl_fresh_mojo_session_destroy(OwlFreshMojoSession* session) {

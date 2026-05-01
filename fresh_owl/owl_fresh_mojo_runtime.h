@@ -37,6 +37,13 @@ OwlFreshMojoSession* owl_fresh_mojo_session_create(
     const char* user_data_dir,
     OwlFreshMojoEventCallback callback,
     void* user_data);
+OwlFreshMojoSession* owl_fresh_mojo_session_create_with_session_remote(
+    const char* content_shell_path,
+    const char* initial_url,
+    const char* user_data_dir,
+    OwlFreshMojoEventCallback callback,
+    void* user_data,
+    uint64_t* session_remote_handle);
 void owl_fresh_mojo_session_destroy(OwlFreshMojoSession* session);
 int32_t owl_fresh_mojo_session_host_pid(OwlFreshMojoSession* session);
 int owl_fresh_mojo_shell_execute_javascript(OwlFreshMojoSession* session,
