@@ -20,6 +20,7 @@
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/devtools_frontend_host.h"
 #include "content/public/browser/web_contents_observer.h"
+#include "ui/gfx/geometry/rect.h"
 
 namespace content {
 
@@ -30,6 +31,7 @@ class ShellDevToolsDelegate {
   virtual void Close() = 0;
   virtual void RequestCloseFromFrontend();
   virtual void DevToolsDockStateChanged(const std::string& dock_state);
+  virtual void SetInspectedPageBounds(const gfx::Rect& bounds);
   virtual ~ShellDevToolsDelegate() {}
 };
 

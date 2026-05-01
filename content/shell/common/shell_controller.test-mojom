@@ -134,6 +134,7 @@ interface OwlFreshInput {
 
 interface OwlFreshSurfaceTreeHost {
   CaptureSurface() => (OwlFreshCaptureResult result);
+  CaptureSurfaceByLabel(string label) => (OwlFreshCaptureResult result);
   GetSurfaceTree() => (OwlFreshSurfaceTree surface_tree);
 };
 

@@ -31,6 +31,7 @@ typedef void (^OwlFreshMojoRuntimeEventHandler)(
 - (BOOL)sendMouseWithKind:(uint32_t)kind x:(float)x y:(float)y button:(uint32_t)button clickCount:(uint32_t)clickCount deltaX:(float)deltaX deltaY:(float)deltaY modifiers:(uint32_t)modifiers error:(NSError**)error NS_SWIFT_NAME(sendMouse(kind:x:y:button:clickCount:deltaX:deltaY:modifiers:));
 - (BOOL)sendKeyWithKeyDown:(BOOL)keyDown keyCode:(uint32_t)keyCode text:(NSString*)text modifiers:(uint32_t)modifiers error:(NSError**)error NS_SWIFT_NAME(sendKey(keyDown:keyCode:text:modifiers:));
 - (nullable NSString*)captureSurfaceJSONWithError:(NSError**)error NS_SWIFT_NAME(captureSurfaceJSON());
+- (nullable NSString*)captureSurfaceJSONWithLabel:(NSString*)label error:(NSError**)error NS_SWIFT_NAME(captureSurfaceJSON(label:));
 - (nullable NSString*)surfaceTreeJSONWithError:(NSError**)error NS_SWIFT_NAME(surfaceTreeJSON());
 - (nullable NSNumber*)acceptActivePopupMenuItemAtIndex:(uint32_t)index error:(NSError**)error NS_SWIFT_NAME(acceptActivePopupMenuItem(index:));
 - (nullable NSNumber*)cancelActivePopupWithError:(NSError**)error NS_SWIFT_NAME(cancelActivePopup());

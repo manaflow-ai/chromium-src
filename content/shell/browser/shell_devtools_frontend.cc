@@ -43,14 +43,17 @@ ShellDevToolsFrontend* ShellDevToolsFrontend::Show(
     WebContents* inspected_contents,
     std::string initial_dock_state,
     base::RepeatingClosure frontend_close_callback,
-    base::RepeatingCallback<void(const std::string&)> dock_state_callback) {
+    base::RepeatingCallback<void(const std::string&)> dock_state_callback,
+    base::RepeatingCallback<void(const gfx::Rect&)>
+        inspected_page_bounds_callback) {
   Shell* shell = Shell::CreateNewWindow(inspected_contents->GetBrowserContext(),
                                         GURL(), nullptr, gfx::Size());
   ShellDevToolsFrontend* devtools_frontend =
       new ShellDevToolsFrontend(shell, inspected_contents,
                                 std::move(initial_dock_state),
                                 std::move(frontend_close_callback),
-                                std::move(dock_state_callback));
+                                std::move(dock_state_callback),
+                                std::move(inspected_page_bounds_callback));
   shell->LoadURL(GetFrontendURL());
   return devtools_frontend;
 }
@@ -88,6 +91,12 @@ void ShellDevToolsFrontend::DevToolsDockStateChanged(
   }
 }
 
+void ShellDevToolsFrontend::SetInspectedPageBounds(const gfx::Rect& bounds) {
+  if (inspected_page_bounds_callback_) {
+    inspected_page_bounds_callback_.Run(bounds);
+  }
+}
+
 void ShellDevToolsFrontend::PrimaryMainDocumentElementAvailable() {
   devtools_bindings_->Attach();
 }
@@ -101,7 +110,9 @@ ShellDevToolsFrontend::ShellDevToolsFrontend(
     WebContents* inspected_contents,
     std::string initial_dock_state,
     base::RepeatingClosure frontend_close_callback,
-    base::RepeatingCallback<void(const std::string&)> dock_state_callback)
+    base::RepeatingCallback<void(const std::string&)> dock_state_callback,
+    base::RepeatingCallback<void(const gfx::Rect&)>
+        inspected_page_bounds_callback)
     : WebContentsObserver(frontend_shell->web_contents()),
       frontend_shell_(frontend_shell),
       devtools_bindings_(
@@ -110,7 +121,9 @@ ShellDevToolsFrontend::ShellDevToolsFrontend(
                                     this,
                                     std::move(initial_dock_state))),
       frontend_close_callback_(std::move(frontend_close_callback)),
-      dock_state_callback_(std::move(dock_state_callback)) {}
+      dock_state_callback_(std::move(dock_state_callback)),
+      inspected_page_bounds_callback_(
+          std::move(inspected_page_bounds_callback)) {}
 
 ShellDevToolsFrontend::~ShellDevToolsFrontend() {}
 

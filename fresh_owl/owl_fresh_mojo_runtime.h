@@ -127,6 +127,12 @@ OWL_FRESH_MOJO_EXPORT int owl_fresh_mojo_surface_tree_capture_surface_json(
     OwlFreshMojoSession* session,
     char** result_json,
     char** error);
+OWL_FRESH_MOJO_EXPORT int
+owl_fresh_mojo_surface_tree_capture_surface_by_label_json(
+    OwlFreshMojoSession* session,
+    const char* label,
+    char** result_json,
+    char** error);
 OWL_FRESH_MOJO_EXPORT int owl_fresh_mojo_surface_tree_get_json(
     OwlFreshMojoSession* session,
     char** result_json,

@@ -204,11 +204,16 @@ void OwlFreshSetLatestContextID(uint32_t id) {
 }
 
 uint32_t OwlFreshLatestContextID() {
+  const OwlFreshSurfaceRecord* latest_web_view = nullptr;
   for (const auto& [key, record] : SurfaceRecords()) {
     if (record.visible && record.kind == OwlFreshSurfaceKind::kWebView &&
-        record.context_id != 0) {
-      return record.context_id;
+        record.context_id != 0 &&
+        (!latest_web_view || record.stable_id > latest_web_view->stable_id)) {
+      latest_web_view = &record;
     }
+  }
+  if (latest_web_view) {
+    return latest_web_view->context_id;
   }
   uint32_t portal_context_id =
       g_portal_context_id.load(std::memory_order_relaxed);
@@ -342,6 +347,22 @@ void OwlFreshDisplayPortalPresentCAContext(uint32_t ca_context_id,
   g_portal_generation.fetch_add(1, std::memory_order_relaxed);
 }
 
+void HidePreviousRootSurfaceRecords(OwlFreshSurfaceKind kind,
+                                    const std::string& label,
+                                    uint64_t active_surface_key) {
+  if (kind != OwlFreshSurfaceKind::kWebView &&
+      kind != OwlFreshSurfaceKind::kDevTools) {
+    return;
+  }
+  for (auto& [key, record] : SurfaceRecords()) {
+    if (key != active_surface_key && record.visible &&
+        record.parent_surface_key == 0 && record.kind == kind &&
+        record.label == label) {
+      record.visible = false;
+    }
+  }
+}
+
 void OwlFreshDisplayPortalPresentCAContextForSurface(
     uint64_t surface_key,
     uint64_t parent_surface_key,
@@ -355,6 +376,8 @@ void OwlFreshDisplayPortalPresentCAContextForSurface(
     return;
   }
 
+  HidePreviousRootSurfaceRecords(kind, label, surface_key);
+
   OwlFreshSurfaceRecord& record = EnsureSurfaceRecord(surface_key);
   record.parent_surface_key = parent_surface_key;
   record.kind = kind;
@@ -363,7 +386,7 @@ void OwlFreshDisplayPortalPresentCAContextForSurface(
   if (kind == OwlFreshSurfaceKind::kPopupWidget) {
     record.z_index = 100;
   } else if (kind == OwlFreshSurfaceKind::kDevTools) {
-    record.z_index = 50;
+    record.z_index = -10;
   } else {
     record.z_index = 0;
   }

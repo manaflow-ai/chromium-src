@@ -13,6 +13,7 @@
 #include "base/memory/weak_ptr.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/shell/browser/shell_devtools_bindings.h"
+#include "ui/gfx/geometry/rect.h"
 
 namespace content {
 
@@ -28,7 +29,10 @@ class ShellDevToolsFrontend : public ShellDevToolsDelegate,
       base::RepeatingClosure frontend_close_callback =
           base::RepeatingClosure(),
       base::RepeatingCallback<void(const std::string&)> dock_state_callback =
-          base::RepeatingCallback<void(const std::string&)>());
+          base::RepeatingCallback<void(const std::string&)>(),
+      base::RepeatingCallback<void(const gfx::Rect&)>
+          inspected_page_bounds_callback =
+              base::RepeatingCallback<void(const gfx::Rect&)>());
 
   ShellDevToolsFrontend(const ShellDevToolsFrontend&) = delete;
   ShellDevToolsFrontend& operator=(const ShellDevToolsFrontend&) = delete;
@@ -38,6 +42,7 @@ class ShellDevToolsFrontend : public ShellDevToolsDelegate,
   void Close() override;
   void RequestCloseFromFrontend() override;
   void DevToolsDockStateChanged(const std::string& dock_state) override;
+  void SetInspectedPageBounds(const gfx::Rect& bounds) override;
 
   Shell* frontend_shell() const { return frontend_shell_; }
 
@@ -53,12 +58,16 @@ class ShellDevToolsFrontend : public ShellDevToolsDelegate,
                         std::string initial_dock_state,
                         base::RepeatingClosure frontend_close_callback,
                         base::RepeatingCallback<void(const std::string&)>
-                            dock_state_callback);
+                            dock_state_callback,
+                        base::RepeatingCallback<void(const gfx::Rect&)>
+                            inspected_page_bounds_callback);
   ~ShellDevToolsFrontend() override;
   raw_ptr<Shell> frontend_shell_;
   std::unique_ptr<ShellDevToolsBindings> devtools_bindings_;
   base::RepeatingClosure frontend_close_callback_;
   base::RepeatingCallback<void(const std::string&)> dock_state_callback_;
+  base::RepeatingCallback<void(const gfx::Rect&)>
+      inspected_page_bounds_callback_;
 
   base::WeakPtrFactory<ShellDevToolsFrontend> weak_ptr_factory_{this};
 };

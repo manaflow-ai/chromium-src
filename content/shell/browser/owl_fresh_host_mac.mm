@@ -152,8 +152,7 @@ CGRect FilePickerSurfaceBounds() {
                     std::max(bounds.height(), 320));
 }
 
-NSWindow* CurrentWindow() {
-  WebContents* contents = CurrentWebContents();
+NSWindow* WindowForWebContents(WebContents* contents) {
   if (!contents) {
     return nil;
   }
@@ -161,13 +160,20 @@ NSWindow* CurrentWindow() {
   return view.window;
 }
 
-RenderWidgetHost* CurrentRenderWidgetHost() {
-  WebContents* contents = CurrentWebContents();
+NSWindow* CurrentWindow() {
+  return WindowForWebContents(CurrentWebContents());
+}
+
+RenderWidgetHost* RenderWidgetHostForWebContents(WebContents* contents) {
   if (!contents) {
     return nullptr;
   }
   RenderWidgetHostView* view = contents->GetRenderWidgetHostView();
   return view ? view->GetRenderWidgetHost() : nullptr;
+}
+
+RenderWidgetHost* CurrentRenderWidgetHost() {
+  return RenderWidgetHostForWebContents(CurrentWebContents());
 }
 
 void EnsureRenderWidgetProducingFramesForOwlFresh() {
@@ -192,6 +198,41 @@ void EnsureRenderWidgetProducingFramesForOwlFresh() {
     host_impl->SetActive(true);
     host_impl->RequestForceRedraw(g_owl_fresh_force_redraw_id++);
   }
+}
+
+void ResizeShellWebContentsForOwlFresh(Shell* shell,
+                                       WebContents* contents,
+                                       const gfx::Size& size) {
+  if (!shell || !contents || size.IsEmpty()) {
+    return;
+  }
+
+  NSSize content_size = NSMakeSize(size.width(), size.height());
+  NSRect content_frame = NSMakeRect(0, 0, content_size.width,
+                                    content_size.height);
+
+  [CATransaction begin];
+  [CATransaction setDisableActions:YES];
+  shell->ResizeWebContentForTests(size);
+  if (NSWindow* window = WindowForWebContents(contents)) {
+    [window setContentSize:content_size];
+    [window.contentView setFrame:content_frame];
+    [window.contentView setNeedsLayout:YES];
+  }
+  NSView* native_view = contents->GetNativeView().GetNativeNSView();
+  [native_view setFrame:content_frame];
+  [native_view setNeedsLayout:YES];
+  [native_view layoutSubtreeIfNeeded];
+  if (RenderWidgetHostView* view = contents->GetRenderWidgetHostView()) {
+    view->SetSize(size);
+  }
+  if (RenderWidgetHost* render_host =
+          RenderWidgetHostForWebContents(contents)) {
+    static_cast<RenderWidgetHostImpl*>(render_host)
+        ->SynchronizeVisualPropertiesIgnoringPendingAck();
+  }
+  [CATransaction commit];
+  [CATransaction flush];
 }
 
 std::string CopyFromSurfaceErrorToString(CopyFromSurfaceError error) {
@@ -266,18 +307,16 @@ OwlFreshDevToolsDockBounds ComputeOwlFreshDevToolsDockBounds(
 
   switch (mode) {
     case mojom::OwlFreshDevToolsMode::kBottom:
-      bounds.web_bounds =
-          gfx::Rect(0, bottom_height, width, height - bottom_height);
-      bounds.devtools_bounds = gfx::Rect(0, 0, width, bottom_height);
+      bounds.web_bounds = gfx::Rect(0, 0, width, height - bottom_height);
+      bounds.devtools_bounds = gfx::Rect(0, 0, width, height);
       break;
     case mojom::OwlFreshDevToolsMode::kRight:
       bounds.web_bounds = gfx::Rect(0, 0, width - side_width, height);
-      bounds.devtools_bounds =
-          gfx::Rect(width - side_width, 0, side_width, height);
+      bounds.devtools_bounds = gfx::Rect(0, 0, width, height);
       break;
     case mojom::OwlFreshDevToolsMode::kLeft:
       bounds.web_bounds = gfx::Rect(side_width, 0, width - side_width, height);
-      bounds.devtools_bounds = gfx::Rect(0, 0, side_width, height);
+      bounds.devtools_bounds = gfx::Rect(0, 0, width, height);
       break;
     case mojom::OwlFreshDevToolsMode::kWindow:
       break;
@@ -332,8 +371,8 @@ std::optional<mojom::OwlFreshDevToolsMode> OwlFreshDevToolsModeForDockState(
 std::string CaptureState(WebContents* contents, RenderWidgetHostView* view) {
   std::string url = contents ? contents->GetLastCommittedURL().spec() : "";
   gfx::Rect bounds = view ? view->GetViewBounds() : gfx::Rect();
-  NSWindow* window = CurrentWindow();
-  RenderWidgetHost* render_host = CurrentRenderWidgetHost();
+  NSWindow* window = WindowForWebContents(contents);
+  RenderWidgetHost* render_host = RenderWidgetHostForWebContents(contents);
   int host_hidden =
       render_host ? static_cast<RenderWidgetHostImpl*>(render_host)->IsHidden()
                   : -1;
@@ -699,27 +738,7 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     gfx::Size size(width, height);
     requested_size_ = size;
     ui::OwlFreshClearDevToolsDockLayout();
-    NSSize content_size = NSMakeSize(width, height);
-    [CATransaction begin];
-    [CATransaction setDisableActions:YES];
-    shell->ResizeWebContentForTests(size);
-    if (NSWindow* window = CurrentWindow()) {
-      [window setContentSize:content_size];
-      [window.contentView setNeedsLayout:YES];
-    }
-    NSView* native_view = contents->GetNativeView().GetNativeNSView();
-    [native_view setFrameSize:content_size];
-    [native_view setNeedsLayout:YES];
-    [native_view layoutSubtreeIfNeeded];
-    if (RenderWidgetHostView* view = contents->GetRenderWidgetHostView()) {
-      view->SetSize(size);
-    }
-    if (RenderWidgetHost* render_host = CurrentRenderWidgetHost()) {
-      static_cast<RenderWidgetHostImpl*>(render_host)
-          ->SynchronizeVisualPropertiesIgnoringPendingAck();
-    }
-    [CATransaction commit];
-    [CATransaction flush];
+    ResizeShellWebContentsForOwlFresh(shell, contents, size);
     EnsureRenderWidgetProducingFramesForOwlFresh();
     ui::OwlFreshDisplayPortalResize(CGRectMake(0, 0, width, height));
     PublishCompositorWithRetry(10);
@@ -890,71 +909,14 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
   }
 
   void CaptureSurface(CaptureSurfaceCallback callback) override {
-    WebContents* contents = CurrentWebContents();
-    if (!contents) {
-      std::move(callback).Run(CaptureError("no current WebContents"));
-      return;
-    }
+    CaptureWebContentsSurface("web-view", CurrentWebContents(),
+                              std::move(callback));
+  }
 
-    RenderWidgetHostView* view = contents->GetRenderWidgetHostView();
-    if (!view) {
-      std::move(callback).Run(CaptureError("no RenderWidgetHostView"));
-      return;
-    }
-
-    if (!view->IsSurfaceAvailableForCopy()) {
-      std::move(callback).Run(CaptureError(CaptureStateError(
-          "RenderWidgetHostView surface is not available", contents, view)));
-      return;
-    }
-
-    if (!view->IsShowing()) {
-      view->Show();
-    }
-    view->WasUnOccluded();
-    view->EnsureSurfaceSynchronizedForWebTest();
-
-    if (view->GetViewBounds().size().IsEmpty()) {
-      std::move(callback).Run(CaptureError(CaptureStateError(
-          "RenderWidgetHostView bounds are empty", contents, view)));
-      return;
-    }
-
-    if (!pending_capture_callback_.is_null()) {
-      std::move(callback).Run(CaptureError(CaptureStateError(
-          "CaptureSurface already has a pending request", contents, view)));
-      return;
-    }
-
-    pending_capture_state_ = CaptureState(contents, view);
-    const bool from_surface =
-        !base::CommandLine::ForCurrentProcess()->HasSwitch(
-            "owl-fresh-window-snapshot");
-
-    if (!from_surface) {
-      std::move(callback).Run(CaptureAppKitViewSnapshot(
-          view->GetNativeView().GetNativeNSView(), pending_capture_state_));
-      pending_capture_state_.clear();
-      pending_capture_mode_.clear();
-      return;
-    }
-
-    pending_capture_mode_ = "mojo-frame-sink-video-capture";
-    pending_capture_callback_ = std::move(callback);
-    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
-        FROM_HERE,
-        base::BindOnce(&OwlFreshSessionImpl::OnCaptureSurfaceTimeout,
-                       weak_factory_.GetWeakPtr()),
-        base::Seconds(20));
-
-    video_capture_ = std::make_unique<OwlFreshVideoCapture>(
-        view,
-        base::BindOnce(&OwlFreshSessionImpl::OnVideoCaptureFrame,
-                       weak_factory_.GetWeakPtr()),
-        base::BindOnce(&OwlFreshSessionImpl::OnVideoCaptureError,
-                       weak_factory_.GetWeakPtr()));
-    video_capture_->Start();
-    return;
+  void CaptureSurfaceByLabel(const std::string& label,
+                             CaptureSurfaceByLabelCallback callback) override {
+    CaptureWebContentsSurface(label, WebContentsForSurfaceLabel(label),
+                              std::move(callback));
   }
 
   void GetSurfaceTree(GetSurfaceTreeCallback callback) override {
@@ -1025,6 +987,9 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
                               weak_factory_.GetWeakPtr()),
           base::BindRepeating(
               &OwlFreshSessionImpl::ApplyDevToolsDockStateFromFrontend,
+              weak_factory_.GetWeakPtr()),
+          base::BindRepeating(
+              &OwlFreshSessionImpl::ApplyDevToolsInspectedPageBounds,
               weak_factory_.GetWeakPtr()));
       devtools_frontend_ = frontend->GetWeakPtr();
       if (frontend->frontend_shell()) {
@@ -1088,6 +1053,39 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     }
   }
 
+  void ApplyDevToolsInspectedPageBounds(const gfx::Rect& bounds) {
+    if (!devtools_frontend_ || active_devtools_label_.empty() ||
+        active_devtools_label_ == "devtools-window") {
+      return;
+    }
+    Shell* shell = CurrentShell();
+    WebContents* inspected_contents = shell ? shell->web_contents() : nullptr;
+    if (!shell || !inspected_contents || bounds.size().IsEmpty()) {
+      return;
+    }
+
+    gfx::Rect container_bounds(0, 0, std::max(requested_size_.width(), 1),
+                               std::max(requested_size_.height(), 1));
+    gfx::Rect inspected_bounds = bounds;
+    inspected_bounds.Intersect(container_bounds);
+    if (inspected_bounds.size().IsEmpty()) {
+      return;
+    }
+
+    ResizeShellWebContentsForOwlFresh(shell, inspected_contents,
+                                      inspected_bounds.size());
+    ui::OwlFreshSetDevToolsDockLayout(
+        active_devtools_label_,
+        CGRectMake(inspected_bounds.x(), inspected_bounds.y(),
+                   inspected_bounds.width(), inspected_bounds.height()),
+        CGRectMake(0, 0, container_bounds.width(), container_bounds.height()));
+    EnsureWebContentsProducingFrames(inspected_contents);
+    if (client_) {
+      client_->OnSurfaceTreeChanged(SurfaceTreeFromRegistry());
+    }
+    PublishCompositorWithRetry(4);
+  }
+
   bool ApplyDevToolsLayout(mojom::OwlFreshDevToolsMode mode,
                            const std::string& label,
                            bool inspect_element) {
@@ -1115,11 +1113,13 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     const OwlFreshDevToolsDockBounds dock_bounds =
         ComputeOwlFreshDevToolsDockBounds(mode, width, height);
     const gfx::Rect web_bounds = dock_bounds.web_bounds;
-    const gfx::Rect devtools_bounds = dock_bounds.devtools_bounds;
+    const gfx::Rect devtools_bounds(0, 0, width, height);
 
-    shell->ResizeWebContentForTests(web_bounds.size());
-    devtools_frontend_->frontend_shell()->ResizeWebContentForTests(
-        devtools_bounds.size());
+    ResizeShellWebContentsForOwlFresh(shell, inspected_contents,
+                                      web_bounds.size());
+    ResizeShellWebContentsForOwlFresh(devtools_frontend_->frontend_shell(),
+                                      devtools_contents,
+                                      devtools_bounds.size());
     ui::OwlFreshSetDevToolsDockLayout(
         label,
         CGRectMake(web_bounds.x(), web_bounds.y(), web_bounds.width(),
@@ -1149,7 +1149,8 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     active_devtools_label_.clear();
     ui::OwlFreshClearDevToolsDockLayout();
     if (Shell* shell = CurrentShell()) {
-      shell->ResizeWebContentForTests(requested_size_);
+      ResizeShellWebContentsForOwlFresh(shell, shell->web_contents(),
+                                        requested_size_);
       EnsureWebContentsProducingFrames(shell->web_contents());
     }
     if (client_) {
@@ -1165,6 +1166,90 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     }
     Shell* frontend_shell = devtools_frontend_->frontend_shell();
     return frontend_shell ? frontend_shell->web_contents() : nullptr;
+  }
+
+  WebContents* WebContentsForSurfaceLabel(const std::string& label) const {
+    if (label.empty() || label == "web-view") {
+      return CurrentWebContents();
+    }
+    if (label == active_devtools_label_ || label == "devtools-bottom" ||
+        label == "devtools-right" || label == "devtools-left" ||
+        label == "devtools-window") {
+      return ActiveDevToolsWebContents();
+    }
+    return nullptr;
+  }
+
+  void CaptureWebContentsSurface(
+      const std::string& label,
+      WebContents* contents,
+      base::OnceCallback<void(mojom::OwlFreshCaptureResultPtr)> callback) {
+    if (!contents) {
+      std::move(callback).Run(
+          CaptureError(base::StrCat({"no WebContents for surface label ",
+                                     label.empty() ? "<empty>" : label})));
+      return;
+    }
+
+    RenderWidgetHostView* view = contents->GetRenderWidgetHostView();
+    if (!view) {
+      std::move(callback).Run(CaptureError(base::StrCat(
+          {"no RenderWidgetHostView for surface label ", label})));
+      return;
+    }
+
+    EnsureWebContentsProducingFrames(contents);
+
+    if (!view->IsSurfaceAvailableForCopy()) {
+      std::move(callback).Run(CaptureError(CaptureStateError(
+          base::StrCat({"RenderWidgetHostView surface is not available for ",
+                        label}),
+          contents, view)));
+      return;
+    }
+
+    if (view->GetViewBounds().size().IsEmpty()) {
+      std::move(callback).Run(CaptureError(CaptureStateError(
+          base::StrCat({"RenderWidgetHostView bounds are empty for ", label}),
+          contents, view)));
+      return;
+    }
+
+    if (!pending_capture_callback_.is_null()) {
+      std::move(callback).Run(CaptureError(CaptureStateError(
+          "CaptureSurface already has a pending request", contents, view)));
+      return;
+    }
+
+    pending_capture_state_ =
+        base::StrCat({"label=", label, " ", CaptureState(contents, view)});
+    const bool from_surface =
+        !base::CommandLine::ForCurrentProcess()->HasSwitch(
+            "owl-fresh-window-snapshot");
+
+    if (!from_surface) {
+      std::move(callback).Run(CaptureAppKitViewSnapshot(
+          view->GetNativeView().GetNativeNSView(), pending_capture_state_));
+      pending_capture_state_.clear();
+      pending_capture_mode_.clear();
+      return;
+    }
+
+    pending_capture_mode_ = "mojo-frame-sink-video-capture";
+    pending_capture_callback_ = std::move(callback);
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+        FROM_HERE,
+        base::BindOnce(&OwlFreshSessionImpl::OnCaptureSurfaceTimeout,
+                       weak_factory_.GetWeakPtr()),
+        base::Seconds(20));
+
+    video_capture_ = std::make_unique<OwlFreshVideoCapture>(
+        view,
+        base::BindOnce(&OwlFreshSessionImpl::OnVideoCaptureFrame,
+                       weak_factory_.GetWeakPtr()),
+        base::BindOnce(&OwlFreshSessionImpl::OnVideoCaptureError,
+                       weak_factory_.GetWeakPtr()));
+    video_capture_->Start();
   }
 
   void EnsureWebContentsProducingFrames(WebContents* contents) {
@@ -1486,7 +1571,8 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
   CALayer* __strong fixture_root_ = nil;
   CALayer* __strong fixture_input_layer_ = nil;
   CATextLayer* __strong fixture_text_layer_ = nil;
-  CaptureSurfaceCallback pending_capture_callback_;
+  base::OnceCallback<void(mojom::OwlFreshCaptureResultPtr)>
+      pending_capture_callback_;
   std::string pending_capture_state_;
   std::string pending_capture_mode_;
   std::unique_ptr<OwlFreshVideoCapture> video_capture_;

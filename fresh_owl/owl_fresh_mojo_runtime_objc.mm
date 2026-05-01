@@ -246,6 +246,19 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
   return ConsumeString(result);
 }
 
+- (nullable NSString*)captureSurfaceJSONWithLabel:(NSString*)label
+                                           error:(NSError**)error {
+  char* result = nullptr;
+  char* c_error = nullptr;
+  if (!FinishStatus(
+          owl_fresh_mojo_surface_tree_capture_surface_by_label_json(
+              _session, label.UTF8String, &result, &c_error),
+          c_error, error)) {
+    return nil;
+  }
+  return ConsumeString(result);
+}
+
 - (nullable NSString*)surfaceTreeJSONWithError:(NSError**)error {
   char* result = nullptr;
   char* c_error = nullptr;

@@ -166,6 +166,9 @@ void ShellDevToolsDelegate::RequestCloseFromFrontend() {
 void ShellDevToolsDelegate::DevToolsDockStateChanged(
     const std::string& dock_state) {}
 
+void ShellDevToolsDelegate::SetInspectedPageBounds(
+    const gfx::Rect& bounds) {}
+
 void ShellDevToolsBindings::InspectElementAt(int x, int y) {
   if (agent_host_) {
     agent_host_->InspectElement(inspected_contents_->GetFocusedFrame(), x, y);
@@ -363,6 +366,23 @@ void ShellDevToolsBindings::HandleMessageFromDevToolsFrontend(
       delegate_->RequestCloseFromFrontend();
     return;
   } else if (*method == "setIsDocked") {
+    if (request_id)
+      SendMessageAck(request_id, {});
+    return;
+  } else if (*method == "setInspectedPageBounds") {
+    if (params.size() < 1)
+      return;
+    const base::DictValue* bounds = params[0].GetIfDict();
+    if (!bounds)
+      return;
+    std::optional<int> x = bounds->FindInt("x");
+    std::optional<int> y = bounds->FindInt("y");
+    std::optional<int> width = bounds->FindInt("width");
+    std::optional<int> height = bounds->FindInt("height");
+    if (x && y && width && height && delegate_) {
+      delegate_->SetInspectedPageBounds(
+          gfx::Rect(*x, *y, std::max(0, *width), std::max(0, *height)));
+    }
     if (request_id)
       SendMessageAck(request_id, {});
     return;

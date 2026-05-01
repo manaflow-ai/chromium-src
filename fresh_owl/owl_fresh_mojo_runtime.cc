@@ -769,6 +769,33 @@ extern "C" int owl_fresh_mojo_input_send_key(OwlFreshMojoSession* session,
   return 0;
 }
 
+namespace {
+
+void FinishCaptureSurfaceJSON(base::OnceClosure quit,
+                              int* status,
+                              char** result_json,
+                              char** error,
+                              const char* failure_message,
+                              content::mojom::OwlFreshCaptureResultPtr result) {
+  if (!result) {
+    Fail(error, failure_message);
+    std::move(quit).Run();
+    return;
+  }
+  base::DictValue dict;
+  dict.Set("pngBase64", base::Base64Encode(base::span(result->png)));
+  dict.Set("width", static_cast<int>(result->width));
+  dict.Set("height", static_cast<int>(result->height));
+  dict.Set("captureMode", result->capture_mode);
+  dict.Set("error", result->error);
+  if (WriteDictResult(std::move(dict), result_json, error) == 0) {
+    *status = 0;
+  }
+  std::move(quit).Run();
+}
+
+}  // namespace
+
 extern "C" int owl_fresh_mojo_surface_tree_capture_surface_json(
     OwlFreshMojoSession* session,
     char** result_json,
@@ -788,28 +815,36 @@ extern "C" int owl_fresh_mojo_surface_tree_capture_surface_json(
   int status = 1;
   base::RunLoop loop;
   session->surface_tree->CaptureSurface(base::BindOnce(
-      [](base::OnceClosure quit,
-         int* status,
-         char** result_json,
-         char** error,
-         content::mojom::OwlFreshCaptureResultPtr result) {
-        if (!result) {
-          Fail(error, "CaptureSurface returned no result");
-          std::move(quit).Run();
-          return;
-        }
-        base::DictValue dict;
-        dict.Set("pngBase64", base::Base64Encode(base::span(result->png)));
-        dict.Set("width", static_cast<int>(result->width));
-        dict.Set("height", static_cast<int>(result->height));
-        dict.Set("captureMode", result->capture_mode);
-        dict.Set("error", result->error);
-        if (WriteDictResult(std::move(dict), result_json, error) == 0) {
-          *status = 0;
-        }
-        std::move(quit).Run();
-      },
-      loop.QuitClosure(), &status, result_json, error));
+      &FinishCaptureSurfaceJSON, loop.QuitClosure(), &status, result_json,
+      error, "CaptureSurface returned no result"));
+  loop.Run();
+  return status;
+}
+
+extern "C" int owl_fresh_mojo_surface_tree_capture_surface_by_label_json(
+    OwlFreshMojoSession* session,
+    const char* label,
+    char** result_json,
+    char** error) {
+  if (result_json) {
+    *result_json = nullptr;
+  }
+  if (error) {
+    *error = nullptr;
+  }
+  if (!session) {
+    return Fail(error, "session is null");
+  }
+  if (!session->surface_tree.is_bound()) {
+    return Fail(error, "OwlFreshSurfaceTreeHost is not bound");
+  }
+  int status = 1;
+  base::RunLoop loop;
+  session->surface_tree->CaptureSurfaceByLabel(
+      label ? label : "",
+      base::BindOnce(&FinishCaptureSurfaceJSON, loop.QuitClosure(), &status,
+                     result_json, error,
+                     "CaptureSurfaceByLabel returned no result"));
   loop.Run();
   return status;
 }
