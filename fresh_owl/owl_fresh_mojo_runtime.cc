@@ -746,6 +746,23 @@ int owl_fresh_mojo_session_bind_native_surface_host_with_handles(
   return 0;
 }
 
+int owl_fresh_mojo_session_bind_native_surface_host_receiver(
+    OwlFreshMojoSession* session,
+    uint64_t receiver_handle,
+    char** error) {
+  int validation_status = ValidateBindRequest(
+      session, receiver_handle, "OwlFreshNativeSurfaceHost",
+      session ? session->native_surface_host_handle : 0, error);
+  if (validation_status != 0) {
+    return validation_status;
+  }
+  session->native_surface_host_handle = receiver_handle;
+  session->owl_session->BindNativeSurfaceHost(
+      PendingReceiverFromHandle<content::mojom::OwlFreshNativeSurfaceHost>(
+          receiver_handle));
+  return 0;
+}
+
 int owl_fresh_mojo_session_bind_devtools_host(OwlFreshMojoSession* session,
                                               uint64_t devtools_host_handle,
                                               char** error) {
