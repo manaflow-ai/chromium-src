@@ -39,6 +39,7 @@
 #include "mojo/public/cpp/platform/platform_channel.h"
 #include "mojo/public/cpp/system/invitation.h"
 
+namespace owl_fresh {
 namespace {
 
 struct GlobalState {
@@ -280,7 +281,7 @@ void OwlFreshMojoClientImpl::OnHostLog(const std::string& message) {
   Emit(session_->callback, session_->user_data, event);
 }
 
-extern "C" int owl_fresh_mojo_global_init(void) {
+int owl_fresh_mojo_global_init(void) {
   GlobalState& global = GetGlobal();
   if (global.initialized) {
     return 0;
@@ -314,7 +315,7 @@ extern "C" int owl_fresh_mojo_global_init(void) {
   return 0;
 }
 
-extern "C" OwlFreshMojoSession* owl_fresh_mojo_session_create(
+OwlFreshMojoSession* owl_fresh_mojo_session_create(
     const char* content_shell_path,
     const char* initial_url,
     const char* user_data_dir,
@@ -406,7 +407,7 @@ extern "C" OwlFreshMojoSession* owl_fresh_mojo_session_create(
   return session.release();
 }
 
-extern "C" void owl_fresh_mojo_session_destroy(
+void owl_fresh_mojo_session_destroy(
     OwlFreshMojoSession* session) {
   if (!session) {
     return;
@@ -430,12 +431,12 @@ extern "C" void owl_fresh_mojo_session_destroy(
   delete session;
 }
 
-extern "C" int32_t owl_fresh_mojo_session_host_pid(
+int32_t owl_fresh_mojo_session_host_pid(
     OwlFreshMojoSession* session) {
   return session && session->process.IsValid() ? session->process.Pid() : -1;
 }
 
-extern "C" int owl_fresh_mojo_session_set_client(
+int owl_fresh_mojo_session_set_client(
     OwlFreshMojoSession* session,
     uint64_t client_handle,
     char** error) {
@@ -455,7 +456,7 @@ extern "C" int owl_fresh_mojo_session_set_client(
   return 0;
 }
 
-extern "C" int owl_fresh_mojo_session_bind_profile(
+int owl_fresh_mojo_session_bind_profile(
     OwlFreshMojoSession* session,
     uint64_t profile_handle,
     char** error) {
@@ -471,7 +472,7 @@ extern "C" int owl_fresh_mojo_session_bind_profile(
   return 0;
 }
 
-extern "C" int owl_fresh_mojo_session_bind_web_view(
+int owl_fresh_mojo_session_bind_web_view(
     OwlFreshMojoSession* session,
     uint64_t web_view_handle,
     char** error) {
@@ -487,7 +488,7 @@ extern "C" int owl_fresh_mojo_session_bind_web_view(
   return 0;
 }
 
-extern "C" int owl_fresh_mojo_session_bind_input(
+int owl_fresh_mojo_session_bind_input(
     OwlFreshMojoSession* session,
     uint64_t input_handle,
     char** error) {
@@ -503,7 +504,7 @@ extern "C" int owl_fresh_mojo_session_bind_input(
   return 0;
 }
 
-extern "C" int owl_fresh_mojo_session_bind_surface_tree(
+int owl_fresh_mojo_session_bind_surface_tree(
     OwlFreshMojoSession* session,
     uint64_t surface_tree_handle,
     char** error) {
@@ -519,7 +520,7 @@ extern "C" int owl_fresh_mojo_session_bind_surface_tree(
   return 0;
 }
 
-extern "C" int owl_fresh_mojo_session_bind_native_surface_host(
+int owl_fresh_mojo_session_bind_native_surface_host(
     OwlFreshMojoSession* session,
     uint64_t native_surface_host_handle,
     char** error) {
@@ -536,7 +537,7 @@ extern "C" int owl_fresh_mojo_session_bind_native_surface_host(
 }
 
 
-extern "C" int owl_fresh_mojo_session_bind_devtools_host(
+int owl_fresh_mojo_session_bind_devtools_host(
     OwlFreshMojoSession* session,
     uint64_t devtools_host_handle,
     char** error) {
@@ -552,7 +553,7 @@ extern "C" int owl_fresh_mojo_session_bind_devtools_host(
   return 0;
 }
 
-extern "C" int owl_fresh_mojo_shell_execute_javascript(
+int owl_fresh_mojo_shell_execute_javascript(
     OwlFreshMojoSession* session,
     const char* script,
     char** result_json,
@@ -597,7 +598,7 @@ extern "C" int owl_fresh_mojo_shell_execute_javascript(
   return status;
 }
 
-extern "C" int owl_fresh_mojo_session_flush(OwlFreshMojoSession* session,
+int owl_fresh_mojo_session_flush(OwlFreshMojoSession* session,
                                              bool* ok,
                                              char** error) {
   if (error) {
@@ -627,7 +628,7 @@ extern "C" int owl_fresh_mojo_session_flush(OwlFreshMojoSession* session,
   return status;
 }
 
-extern "C" int owl_fresh_mojo_profile_get_path(OwlFreshMojoSession* session,
+int owl_fresh_mojo_profile_get_path(OwlFreshMojoSession* session,
                                                 char** path,
                                                 char** error) {
   if (path) {
@@ -660,7 +661,7 @@ extern "C" int owl_fresh_mojo_profile_get_path(OwlFreshMojoSession* session,
   return status;
 }
 
-extern "C" int owl_fresh_mojo_web_view_navigate(OwlFreshMojoSession* session,
+int owl_fresh_mojo_web_view_navigate(OwlFreshMojoSession* session,
                                                  const char* url,
                                                  char** error) {
   if (error) {
@@ -679,7 +680,7 @@ extern "C" int owl_fresh_mojo_web_view_navigate(OwlFreshMojoSession* session,
   return 0;
 }
 
-extern "C" int owl_fresh_mojo_web_view_resize(OwlFreshMojoSession* session,
+int owl_fresh_mojo_web_view_resize(OwlFreshMojoSession* session,
                                                uint32_t width,
                                                uint32_t height,
                                                float scale,
@@ -697,7 +698,7 @@ extern "C" int owl_fresh_mojo_web_view_resize(OwlFreshMojoSession* session,
   return 0;
 }
 
-extern "C" int owl_fresh_mojo_web_view_set_focus(OwlFreshMojoSession* session,
+int owl_fresh_mojo_web_view_set_focus(OwlFreshMojoSession* session,
                                                   bool focused,
                                                   char** error) {
   if (error) {
@@ -713,7 +714,7 @@ extern "C" int owl_fresh_mojo_web_view_set_focus(OwlFreshMojoSession* session,
   return 0;
 }
 
-extern "C" int owl_fresh_mojo_input_send_mouse(OwlFreshMojoSession* session,
+int owl_fresh_mojo_input_send_mouse(OwlFreshMojoSession* session,
                                                 uint32_t kind,
                                                 float x,
                                                 float y,
@@ -745,7 +746,7 @@ extern "C" int owl_fresh_mojo_input_send_mouse(OwlFreshMojoSession* session,
   return 0;
 }
 
-extern "C" int owl_fresh_mojo_input_send_key(OwlFreshMojoSession* session,
+int owl_fresh_mojo_input_send_key(OwlFreshMojoSession* session,
                                               bool key_down,
                                               uint32_t key_code,
                                               const char* text,
@@ -796,7 +797,7 @@ void FinishCaptureSurfaceJSON(base::OnceClosure quit,
 
 }  // namespace
 
-extern "C" int owl_fresh_mojo_surface_tree_capture_surface_json(
+int owl_fresh_mojo_surface_tree_capture_surface_json(
     OwlFreshMojoSession* session,
     char** result_json,
     char** error) {
@@ -821,7 +822,7 @@ extern "C" int owl_fresh_mojo_surface_tree_capture_surface_json(
   return status;
 }
 
-extern "C" int owl_fresh_mojo_surface_tree_capture_surface_by_label_json(
+int owl_fresh_mojo_surface_tree_capture_surface_by_label_json(
     OwlFreshMojoSession* session,
     const char* label,
     char** result_json,
@@ -849,7 +850,7 @@ extern "C" int owl_fresh_mojo_surface_tree_capture_surface_by_label_json(
   return status;
 }
 
-extern "C" int owl_fresh_mojo_surface_tree_get_json(
+int owl_fresh_mojo_surface_tree_get_json(
     OwlFreshMojoSession* session,
     char** result_json,
     char** error) {
@@ -884,7 +885,7 @@ extern "C" int owl_fresh_mojo_surface_tree_get_json(
   return status;
 }
 
-extern "C" int owl_fresh_mojo_native_surface_accept_active_popup_menu_item(
+int owl_fresh_mojo_native_surface_accept_active_popup_menu_item(
     OwlFreshMojoSession* session,
     uint32_t index,
     bool* ok,
@@ -918,7 +919,7 @@ extern "C" int owl_fresh_mojo_native_surface_accept_active_popup_menu_item(
   return status;
 }
 
-extern "C" int owl_fresh_mojo_native_surface_cancel_active_popup(
+int owl_fresh_mojo_native_surface_cancel_active_popup(
     OwlFreshMojoSession* session,
     bool* ok,
     char** error) {
@@ -949,7 +950,7 @@ extern "C" int owl_fresh_mojo_native_surface_cancel_active_popup(
   return status;
 }
 
-extern "C" int
+int
 owl_fresh_mojo_native_surface_select_active_file_picker_files_json(
     OwlFreshMojoSession* session,
     const char* paths_json,
@@ -999,7 +1000,7 @@ owl_fresh_mojo_native_surface_select_active_file_picker_files_json(
   return status;
 }
 
-extern "C" int owl_fresh_mojo_native_surface_cancel_active_file_picker(
+int owl_fresh_mojo_native_surface_cancel_active_file_picker(
     OwlFreshMojoSession* session,
     bool* ok,
     char** error) {
@@ -1031,7 +1032,7 @@ extern "C" int owl_fresh_mojo_native_surface_cancel_active_file_picker(
 }
 
 
-extern "C" int owl_fresh_mojo_devtools_open(OwlFreshMojoSession* session,
+int owl_fresh_mojo_devtools_open(OwlFreshMojoSession* session,
                                               uint32_t mode,
                                               bool* ok,
                                               char** error) {
@@ -1064,7 +1065,7 @@ extern "C" int owl_fresh_mojo_devtools_open(OwlFreshMojoSession* session,
   return status;
 }
 
-extern "C" int owl_fresh_mojo_devtools_close(OwlFreshMojoSession* session,
+int owl_fresh_mojo_devtools_close(OwlFreshMojoSession* session,
                                                bool* ok,
                                                char** error) {
   if (ok) {
@@ -1094,7 +1095,7 @@ extern "C" int owl_fresh_mojo_devtools_close(OwlFreshMojoSession* session,
   return status;
 }
 
-extern "C" int owl_fresh_mojo_devtools_evaluate_javascript(
+int owl_fresh_mojo_devtools_evaluate_javascript(
     OwlFreshMojoSession* session,
     const char* script,
     char** result_json,
@@ -1132,13 +1133,15 @@ extern "C" int owl_fresh_mojo_devtools_evaluate_javascript(
   return status;
 }
 
-extern "C" void owl_fresh_mojo_poll_events(uint32_t timeout_ms) {
+void owl_fresh_mojo_poll_events(uint32_t timeout_ms) {
   base::RunLoop loop;
   base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, loop.QuitClosure(), base::Milliseconds(timeout_ms));
   loop.Run();
 }
 
-extern "C" void owl_fresh_mojo_free_buffer(void* buffer) {
+void owl_fresh_mojo_free_buffer(void* buffer) {
   std::free(buffer);
 }
+
+}  // namespace owl_fresh

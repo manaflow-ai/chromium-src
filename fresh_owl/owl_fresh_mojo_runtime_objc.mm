@@ -5,6 +5,7 @@
 #include "base/memory/raw_ptr.h"
 #include "fresh_owl/owl_fresh_mojo_runtime.h"
 
+
 namespace {
 
 NSError* OwlFreshNSError(NSString* message) {
@@ -16,7 +17,7 @@ NSError* OwlFreshNSError(NSString* message) {
 BOOL FinishStatus(int status, char* c_error, NSError** error) {
   if (status == 0) {
     if (c_error) {
-      owl_fresh_mojo_free_buffer(c_error);
+      owl_fresh::owl_fresh_mojo_free_buffer(c_error);
     }
     return YES;
   }
@@ -26,7 +27,7 @@ BOOL FinishStatus(int status, char* c_error, NSError** error) {
     *error = OwlFreshNSError(message ?: @"unknown Mojo runtime error");
   }
   if (c_error) {
-    owl_fresh_mojo_free_buffer(c_error);
+    owl_fresh::owl_fresh_mojo_free_buffer(c_error);
   }
   return NO;
 }
@@ -36,7 +37,7 @@ NSString* ConsumeString(char* value) {
     return @"";
   }
   NSString* result = [NSString stringWithUTF8String:value] ?: @"";
-  owl_fresh_mojo_free_buffer(value);
+  owl_fresh::owl_fresh_mojo_free_buffer(value);
   return result;
 }
 
@@ -45,11 +46,11 @@ NSString* ConsumeString(char* value) {
 @interface OwlFreshMojoRuntimeSessionBridgeImpl
     : NSObject <OwlFreshMojoRuntimeSessionBridge>
 - (instancetype)initWithEventHandler:(OwlFreshMojoRuntimeEventHandler)eventHandler;
-- (void)setSession:(OwlFreshMojoSession*)session;
-- (void)emitEvent:(const OwlFreshMojoEvent*)event;
+- (void)setSession:(owl_fresh::OwlFreshMojoSession*)session;
+- (void)emitEvent:(const owl_fresh::OwlFreshMojoEvent*)event;
 @end
 
-static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
+static void OwlFreshMojoRuntimeEventThunk(const owl_fresh::OwlFreshMojoEvent* event,
                                           void* user_data) {
   if (!event || !user_data) {
     return;
@@ -60,7 +61,7 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
 }
 
 @implementation OwlFreshMojoRuntimeSessionBridgeImpl {
-  raw_ptr<OwlFreshMojoSession> _session;
+  raw_ptr<owl_fresh::OwlFreshMojoSession> _session;
   OwlFreshMojoRuntimeEventHandler _eventHandler;
   BOOL _destroyed;
 }
@@ -77,12 +78,12 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
   [self destroy];
 }
 
-- (void)setSession:(OwlFreshMojoSession*)session {
+- (void)setSession:(owl_fresh::OwlFreshMojoSession*)session {
   _session = session;
 }
 
 - (int32_t)hostPID {
-  return _session ? owl_fresh_mojo_session_host_pid(_session) : -1;
+  return _session ? owl_fresh::owl_fresh_mojo_session_host_pid(_session) : -1;
 }
 
 - (void)destroy {
@@ -90,11 +91,11 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
     return;
   }
   _destroyed = YES;
-  owl_fresh_mojo_session_destroy(_session);
+  owl_fresh::owl_fresh_mojo_session_destroy(_session);
   _session = nullptr;
 }
 
-- (void)emitEvent:(const OwlFreshMojoEvent*)event {
+- (void)emitEvent:(const owl_fresh::OwlFreshMojoEvent*)event {
   if (!_eventHandler || !event) {
     return;
   }
@@ -109,53 +110,53 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
 
 - (BOOL)setClientWithHandle:(uint64_t)handle error:(NSError**)error {
   char* c_error = nullptr;
-  return FinishStatus(owl_fresh_mojo_session_set_client(_session, handle, &c_error),
+  return FinishStatus(owl_fresh::owl_fresh_mojo_session_set_client(_session, handle, &c_error),
                       c_error, error);
 }
 
 - (BOOL)bindProfileWithHandle:(uint64_t)handle error:(NSError**)error {
   char* c_error = nullptr;
-  return FinishStatus(owl_fresh_mojo_session_bind_profile(_session, handle, &c_error),
+  return FinishStatus(owl_fresh::owl_fresh_mojo_session_bind_profile(_session, handle, &c_error),
                       c_error, error);
 }
 
 - (BOOL)bindWebViewWithHandle:(uint64_t)handle error:(NSError**)error {
   char* c_error = nullptr;
-  return FinishStatus(owl_fresh_mojo_session_bind_web_view(_session, handle, &c_error),
+  return FinishStatus(owl_fresh::owl_fresh_mojo_session_bind_web_view(_session, handle, &c_error),
                       c_error, error);
 }
 
 - (BOOL)bindInputWithHandle:(uint64_t)handle error:(NSError**)error {
   char* c_error = nullptr;
-  return FinishStatus(owl_fresh_mojo_session_bind_input(_session, handle, &c_error),
+  return FinishStatus(owl_fresh::owl_fresh_mojo_session_bind_input(_session, handle, &c_error),
                       c_error, error);
 }
 
 - (BOOL)bindSurfaceTreeWithHandle:(uint64_t)handle error:(NSError**)error {
   char* c_error = nullptr;
   return FinishStatus(
-      owl_fresh_mojo_session_bind_surface_tree(_session, handle, &c_error),
+      owl_fresh::owl_fresh_mojo_session_bind_surface_tree(_session, handle, &c_error),
       c_error, error);
 }
 
 - (BOOL)bindNativeSurfaceHostWithHandle:(uint64_t)handle error:(NSError**)error {
   char* c_error = nullptr;
   return FinishStatus(
-      owl_fresh_mojo_session_bind_native_surface_host(_session, handle, &c_error),
+      owl_fresh::owl_fresh_mojo_session_bind_native_surface_host(_session, handle, &c_error),
       c_error, error);
 }
 
 - (BOOL)bindDevToolsHostWithHandle:(uint64_t)handle error:(NSError**)error {
   char* c_error = nullptr;
   return FinishStatus(
-      owl_fresh_mojo_session_bind_devtools_host(_session, handle, &c_error),
+      owl_fresh::owl_fresh_mojo_session_bind_devtools_host(_session, handle, &c_error),
       c_error, error);
 }
 
 - (nullable NSNumber*)flushWithError:(NSError**)error {
   BOOL ok = NO;
   char* c_error = nullptr;
-  if (!FinishStatus(owl_fresh_mojo_session_flush(_session, &ok, &c_error),
+  if (!FinishStatus(owl_fresh::owl_fresh_mojo_session_flush(_session, &ok, &c_error),
                     c_error, error)) {
     return nil;
   }
@@ -165,7 +166,7 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
 - (nullable NSString*)profilePathWithError:(NSError**)error {
   char* path = nullptr;
   char* c_error = nullptr;
-  if (!FinishStatus(owl_fresh_mojo_profile_get_path(_session, &path, &c_error),
+  if (!FinishStatus(owl_fresh::owl_fresh_mojo_profile_get_path(_session, &path, &c_error),
                     c_error, error)) {
     return nil;
   }
@@ -175,7 +176,7 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
 - (nullable NSString*)executeJavaScript:(NSString*)script error:(NSError**)error {
   char* result = nullptr;
   char* c_error = nullptr;
-  if (!FinishStatus(owl_fresh_mojo_shell_execute_javascript(
+  if (!FinishStatus(owl_fresh::owl_fresh_mojo_shell_execute_javascript(
                         _session, script.UTF8String, &result, &c_error),
                     c_error, error)) {
     return nil;
@@ -186,7 +187,7 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
 - (BOOL)navigateToURL:(NSString*)url error:(NSError**)error {
   char* c_error = nullptr;
   return FinishStatus(
-      owl_fresh_mojo_web_view_navigate(_session, url.UTF8String, &c_error),
+      owl_fresh::owl_fresh_mojo_web_view_navigate(_session, url.UTF8String, &c_error),
       c_error, error);
 }
 
@@ -196,14 +197,14 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
                   error:(NSError**)error {
   char* c_error = nullptr;
   return FinishStatus(
-      owl_fresh_mojo_web_view_resize(_session, width, height, scale, &c_error),
+      owl_fresh::owl_fresh_mojo_web_view_resize(_session, width, height, scale, &c_error),
       c_error, error);
 }
 
 - (BOOL)setFocus:(BOOL)focused error:(NSError**)error {
   char* c_error = nullptr;
   return FinishStatus(
-      owl_fresh_mojo_web_view_set_focus(_session, focused, &c_error), c_error,
+      owl_fresh::owl_fresh_mojo_web_view_set_focus(_session, focused, &c_error), c_error,
       error);
 }
 
@@ -217,7 +218,7 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
                 modifiers:(uint32_t)modifiers
                     error:(NSError**)error {
   char* c_error = nullptr;
-  return FinishStatus(owl_fresh_mojo_input_send_mouse(
+  return FinishStatus(owl_fresh::owl_fresh_mojo_input_send_mouse(
                           _session, kind, x, y, button, clickCount, deltaX,
                           deltaY, modifiers, &c_error),
                       c_error, error);
@@ -229,7 +230,7 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
                  modifiers:(uint32_t)modifiers
                      error:(NSError**)error {
   char* c_error = nullptr;
-  return FinishStatus(owl_fresh_mojo_input_send_key(
+  return FinishStatus(owl_fresh::owl_fresh_mojo_input_send_key(
                           _session, keyDown, keyCode, text.UTF8String,
                           modifiers, &c_error),
                       c_error, error);
@@ -238,7 +239,7 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
 - (nullable NSString*)captureSurfaceJSONWithError:(NSError**)error {
   char* result = nullptr;
   char* c_error = nullptr;
-  if (!FinishStatus(owl_fresh_mojo_surface_tree_capture_surface_json(
+  if (!FinishStatus(owl_fresh::owl_fresh_mojo_surface_tree_capture_surface_json(
                         _session, &result, &c_error),
                     c_error, error)) {
     return nil;
@@ -251,7 +252,7 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
   char* result = nullptr;
   char* c_error = nullptr;
   if (!FinishStatus(
-          owl_fresh_mojo_surface_tree_capture_surface_by_label_json(
+          owl_fresh::owl_fresh_mojo_surface_tree_capture_surface_by_label_json(
               _session, label.UTF8String, &result, &c_error),
           c_error, error)) {
     return nil;
@@ -262,7 +263,7 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
 - (nullable NSString*)surfaceTreeJSONWithError:(NSError**)error {
   char* result = nullptr;
   char* c_error = nullptr;
-  if (!FinishStatus(owl_fresh_mojo_surface_tree_get_json(_session, &result,
+  if (!FinishStatus(owl_fresh::owl_fresh_mojo_surface_tree_get_json(_session, &result,
                                                          &c_error),
                     c_error, error)) {
     return nil;
@@ -274,7 +275,7 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
                                                 error:(NSError**)error {
   BOOL ok = NO;
   char* c_error = nullptr;
-  if (!FinishStatus(owl_fresh_mojo_native_surface_accept_active_popup_menu_item(
+  if (!FinishStatus(owl_fresh::owl_fresh_mojo_native_surface_accept_active_popup_menu_item(
                         _session, index, &ok, &c_error),
                     c_error, error)) {
     return nil;
@@ -285,7 +286,7 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
 - (nullable NSNumber*)cancelActivePopupWithError:(NSError**)error {
   BOOL ok = NO;
   char* c_error = nullptr;
-  if (!FinishStatus(owl_fresh_mojo_native_surface_cancel_active_popup(
+  if (!FinishStatus(owl_fresh::owl_fresh_mojo_native_surface_cancel_active_popup(
                         _session, &ok, &c_error),
                     c_error, error)) {
     return nil;
@@ -298,7 +299,7 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
   BOOL ok = NO;
   char* c_error = nullptr;
   if (!FinishStatus(
-          owl_fresh_mojo_native_surface_select_active_file_picker_files_json(
+          owl_fresh::owl_fresh_mojo_native_surface_select_active_file_picker_files_json(
               _session, pathsJSON.UTF8String, &ok, &c_error),
           c_error, error)) {
     return nil;
@@ -309,7 +310,7 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
 - (nullable NSNumber*)cancelActiveFilePickerWithError:(NSError**)error {
   BOOL ok = NO;
   char* c_error = nullptr;
-  if (!FinishStatus(owl_fresh_mojo_native_surface_cancel_active_file_picker(
+  if (!FinishStatus(owl_fresh::owl_fresh_mojo_native_surface_cancel_active_file_picker(
                         _session, &ok, &c_error),
                     c_error, error)) {
     return nil;
@@ -320,7 +321,7 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
 - (nullable NSNumber*)openDevToolsWithMode:(uint32_t)mode error:(NSError**)error {
   BOOL ok = NO;
   char* c_error = nullptr;
-  if (!FinishStatus(owl_fresh_mojo_devtools_open(_session, mode, &ok, &c_error),
+  if (!FinishStatus(owl_fresh::owl_fresh_mojo_devtools_open(_session, mode, &ok, &c_error),
                     c_error, error)) {
     return nil;
   }
@@ -330,7 +331,7 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
 - (nullable NSNumber*)closeDevToolsWithError:(NSError**)error {
   BOOL ok = NO;
   char* c_error = nullptr;
-  if (!FinishStatus(owl_fresh_mojo_devtools_close(_session, &ok, &c_error),
+  if (!FinishStatus(owl_fresh::owl_fresh_mojo_devtools_close(_session, &ok, &c_error),
                     c_error, error)) {
     return nil;
   }
@@ -341,7 +342,7 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
                                           error:(NSError**)error {
   char* result = nullptr;
   char* c_error = nullptr;
-  if (!FinishStatus(owl_fresh_mojo_devtools_evaluate_javascript(
+  if (!FinishStatus(owl_fresh::owl_fresh_mojo_devtools_evaluate_javascript(
                         _session, script.UTF8String, &result, &c_error),
                     c_error, error)) {
     return nil;
@@ -354,12 +355,12 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
 @implementation OwlFreshMojoRuntimeBridge
 
 - (BOOL)initializeRuntimeWithError:(NSError**)error {
-  const int status = owl_fresh_mojo_global_init();
+  const int status = owl_fresh::owl_fresh_mojo_global_init();
   if (status == 0) {
     return YES;
   }
   if (error) {
-    *error = OwlFreshNSError(@"owl_fresh_mojo_global_init failed");
+    *error = OwlFreshNSError(@"owl_fresh::owl_fresh_mojo_global_init failed");
   }
   return NO;
 }
@@ -373,13 +374,13 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
   OwlFreshMojoRuntimeSessionBridgeImpl* session_object =
       [[OwlFreshMojoRuntimeSessionBridgeImpl alloc]
           initWithEventHandler:eventHandler];
-  OwlFreshMojoSession* session = owl_fresh_mojo_session_create(
+  owl_fresh::OwlFreshMojoSession* session = owl_fresh::owl_fresh_mojo_session_create(
       contentShellPath.UTF8String, initialURL.UTF8String,
       userDataDirectory.UTF8String, OwlFreshMojoRuntimeEventThunk,
       (__bridge void*)session_object);
   if (!session) {
     if (error) {
-      *error = OwlFreshNSError(@"owl_fresh_mojo_session_create returned null");
+      *error = OwlFreshNSError(@"owl_fresh::owl_fresh_mojo_session_create returned null");
     }
     return nil;
   }
@@ -388,7 +389,7 @@ static void OwlFreshMojoRuntimeEventThunk(const OwlFreshMojoEvent* event,
 }
 
 - (void)pollEventsWithMilliseconds:(uint32_t)milliseconds {
-  owl_fresh_mojo_poll_events(milliseconds);
+  owl_fresh::owl_fresh_mojo_poll_events(milliseconds);
 }
 
 @end
