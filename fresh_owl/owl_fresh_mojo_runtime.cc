@@ -573,6 +573,23 @@ int owl_fresh_mojo_session_bind_profile_with_handles(
   return 0;
 }
 
+int owl_fresh_mojo_session_bind_profile_receiver(
+    OwlFreshMojoSession* session,
+    uint64_t receiver_handle,
+    char** error) {
+  int validation_status =
+      ValidateBindRequest(session, receiver_handle, "OwlFreshProfile",
+                          session ? session->profile_handle : 0, error);
+  if (validation_status != 0) {
+    return validation_status;
+  }
+  session->profile_handle = receiver_handle;
+  session->owl_session->BindProfile(
+      PendingReceiverFromHandle<content::mojom::OwlFreshProfile>(
+          receiver_handle));
+  return 0;
+}
+
 int owl_fresh_mojo_session_bind_web_view(OwlFreshMojoSession* session,
                                          uint64_t web_view_handle,
                                          char** error) {
