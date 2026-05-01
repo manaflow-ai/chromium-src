@@ -1484,3 +1484,11 @@ void owl_fresh_mojo_free_buffer(void* buffer) {
 }
 
 }  // namespace owl_fresh
+
+extern "C" {
+
+OWL_FRESH_MOJO_RUNTIME_EXPORT int OwlFreshMojoRuntimeInitialize(void) {
+  return owl_fresh::owl_fresh_mojo_global_init();
+}
+
+}  // extern "C"

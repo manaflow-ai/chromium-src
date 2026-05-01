@@ -4,6 +4,12 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#if defined(_WIN32)
+#define OWL_FRESH_MOJO_RUNTIME_EXPORT __declspec(dllexport)
+#else
+#define OWL_FRESH_MOJO_RUNTIME_EXPORT __attribute__((visibility("default")))
+#endif
+
 namespace owl_fresh {
 
 struct OwlFreshMojoSession;
@@ -215,5 +221,15 @@ void owl_fresh_mojo_poll_events(uint32_t timeout_ms);
 void owl_fresh_mojo_free_buffer(void* buffer);
 
 }  // namespace owl_fresh
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+OWL_FRESH_MOJO_RUNTIME_EXPORT int OwlFreshMojoRuntimeInitialize(void);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif
 
 #endif  // FRESH_OWL_OWL_FRESH_MOJO_RUNTIME_H_
