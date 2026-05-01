@@ -47,6 +47,7 @@ NSString* ConsumeString(char* value) {
 - (instancetype)initWithEventHandler:
     (OwlFreshMojoRuntimeEventHandler)eventHandler;
 - (void)setSession:(owl_fresh::OwlFreshMojoSession*)session
+    shellControllerRemoteHandle:(uint64_t)shellControllerRemoteHandle
     owlSessionRemoteHandle:(uint64_t)owlSessionRemoteHandle;
 - (void)emitEvent:(const owl_fresh::OwlFreshMojoEvent*)event;
 @end
@@ -65,6 +66,7 @@ static void OwlFreshMojoRuntimeEventThunk(
 @implementation OwlFreshMojoRuntimeSessionBridgeImpl {
   raw_ptr<owl_fresh::OwlFreshMojoSession> _session;
   OwlFreshMojoRuntimeEventHandler _eventHandler;
+  uint64_t _shellControllerRemoteHandle;
   uint64_t _owlSessionRemoteHandle;
   BOOL _destroyed;
 }
@@ -83,13 +85,19 @@ static void OwlFreshMojoRuntimeEventThunk(
 }
 
 - (void)setSession:(owl_fresh::OwlFreshMojoSession*)session
+    shellControllerRemoteHandle:(uint64_t)shellControllerRemoteHandle
     owlSessionRemoteHandle:(uint64_t)owlSessionRemoteHandle {
   _session = session;
+  _shellControllerRemoteHandle = shellControllerRemoteHandle;
   _owlSessionRemoteHandle = owlSessionRemoteHandle;
 }
 
 - (int32_t)hostPID {
   return _session ? owl_fresh::owl_fresh_mojo_session_host_pid(_session) : -1;
+}
+
+- (uint64_t)shellControllerRemoteHandle {
+  return _shellControllerRemoteHandle;
 }
 
 - (uint64_t)owlSessionRemoteHandle {
@@ -529,12 +537,13 @@ static void OwlFreshMojoRuntimeEventThunk(
   OwlFreshMojoRuntimeSessionBridgeImpl* session_object =
       [[OwlFreshMojoRuntimeSessionBridgeImpl alloc]
           initWithEventHandler:eventHandler];
+  uint64_t shell_controller_remote_handle = 0;
   uint64_t owl_session_remote_handle = 0;
   owl_fresh::OwlFreshMojoSession* session =
-      owl_fresh::owl_fresh_mojo_session_create_with_session_remote(
+      owl_fresh::owl_fresh_mojo_session_create_with_shell_controller_remote(
           contentShellPath.UTF8String, initialURL.UTF8String,
           userDataDirectory.UTF8String, OwlFreshMojoRuntimeEventThunk,
-          (__bridge void*)session_object, &owl_session_remote_handle);
+          (__bridge void*)session_object, &shell_controller_remote_handle);
   if (!session) {
     if (error) {
       *error = OwlFreshNSError(
@@ -543,6 +552,7 @@ static void OwlFreshMojoRuntimeEventThunk(
     return nil;
   }
   [session_object setSession:session
+      shellControllerRemoteHandle:shell_controller_remote_handle
       owlSessionRemoteHandle:owl_session_remote_handle];
   return session_object;
 }

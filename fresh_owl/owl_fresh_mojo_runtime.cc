@@ -366,7 +366,11 @@ OwlFreshMojoSession* CreateSession(
     const char* user_data_dir,
     OwlFreshMojoEventCallback callback,
     void* user_data,
+    uint64_t* shell_controller_remote_handle,
     uint64_t* session_remote_handle) {
+  if (shell_controller_remote_handle) {
+    *shell_controller_remote_handle = 0;
+  }
   if (session_remote_handle) {
     *session_remote_handle = 0;
   }
@@ -429,14 +433,21 @@ OwlFreshMojoSession* CreateSession(
   session->process = std::move(process);
 
   mojo::OutgoingInvitation invitation;
-  session->controller = mojo::Remote<content::mojom::ShellController>(
-      mojo::PendingRemote<content::mojom::ShellController>(
-          invitation.AttachMessagePipe(0), 0));
+  if (shell_controller_remote_handle) {
+    *shell_controller_remote_handle =
+        invitation.AttachMessagePipe(0).release().value();
+  } else {
+    session->controller = mojo::Remote<content::mojom::ShellController>(
+        mojo::PendingRemote<content::mojom::ShellController>(
+            invitation.AttachMessagePipe(0), 0));
+  }
   mojo::OutgoingInvitation::Send(std::move(invitation),
                                  session->process.Handle(),
                                  channel.TakeLocalEndpoint());
 
-  if (session_remote_handle) {
+  if (shell_controller_remote_handle) {
+    return session.release();
+  } else if (session_remote_handle) {
     mojo::MessagePipe pipe;
     *session_remote_handle = pipe.handle0.release().value();
     session->controller->BindOwlFreshSession(
@@ -474,7 +485,7 @@ OwlFreshMojoSession* owl_fresh_mojo_session_create(
     OwlFreshMojoEventCallback callback,
     void* user_data) {
   return CreateSession(content_shell_path, initial_url, user_data_dir, callback,
-                       user_data, nullptr);
+                       user_data, nullptr, nullptr);
 }
 
 OwlFreshMojoSession* owl_fresh_mojo_session_create_with_session_remote(
@@ -485,7 +496,19 @@ OwlFreshMojoSession* owl_fresh_mojo_session_create_with_session_remote(
     void* user_data,
     uint64_t* session_remote_handle) {
   return CreateSession(content_shell_path, initial_url, user_data_dir, callback,
-                       user_data, session_remote_handle);
+                       user_data, nullptr, session_remote_handle);
+}
+
+OwlFreshMojoSession*
+owl_fresh_mojo_session_create_with_shell_controller_remote(
+    const char* content_shell_path,
+    const char* initial_url,
+    const char* user_data_dir,
+    OwlFreshMojoEventCallback callback,
+    void* user_data,
+    uint64_t* shell_controller_remote_handle) {
+  return CreateSession(content_shell_path, initial_url, user_data_dir, callback,
+                       user_data, shell_controller_remote_handle, nullptr);
 }
 
 void owl_fresh_mojo_session_destroy(OwlFreshMojoSession* session) {
