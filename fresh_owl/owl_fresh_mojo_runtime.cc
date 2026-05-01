@@ -640,6 +640,22 @@ int owl_fresh_mojo_session_bind_input_with_handles(OwlFreshMojoSession* session,
   return 0;
 }
 
+int owl_fresh_mojo_session_bind_input_receiver(OwlFreshMojoSession* session,
+                                               uint64_t receiver_handle,
+                                               char** error) {
+  int validation_status =
+      ValidateBindRequest(session, receiver_handle, "OwlFreshInput",
+                          session ? session->input_handle : 0, error);
+  if (validation_status != 0) {
+    return validation_status;
+  }
+  session->input_handle = receiver_handle;
+  session->owl_session->BindInput(
+      PendingReceiverFromHandle<content::mojom::OwlFreshInput>(
+          receiver_handle));
+  return 0;
+}
+
 int owl_fresh_mojo_session_bind_surface_tree(OwlFreshMojoSession* session,
                                              uint64_t surface_tree_handle,
                                              char** error) {

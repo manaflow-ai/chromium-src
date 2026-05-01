@@ -76,6 +76,9 @@ int owl_fresh_mojo_session_bind_input_with_handles(OwlFreshMojoSession* session,
                                                    uint64_t remote_handle,
                                                    uint64_t receiver_handle,
                                                    char** error);
+int owl_fresh_mojo_session_bind_input_receiver(OwlFreshMojoSession* session,
+                                               uint64_t receiver_handle,
+                                               char** error);
 int owl_fresh_mojo_session_bind_surface_tree(OwlFreshMojoSession* session,
                                              uint64_t surface_tree_handle,
                                              char** error);
