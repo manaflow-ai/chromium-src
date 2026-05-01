@@ -209,6 +209,15 @@ static void OwlFreshMojoRuntimeEventThunk(
       c_error, error);
 }
 
+- (BOOL)bindSurfaceTreeWithReceiverHandle:(uint64_t)receiverHandle
+                                    error:(NSError**)error {
+  char* c_error = nullptr;
+  return FinishStatus(
+      owl_fresh::owl_fresh_mojo_session_bind_surface_tree_receiver(
+          _session, receiverHandle, &c_error),
+      c_error, error);
+}
+
 - (BOOL)bindNativeSurfaceHostWithHandle:(uint64_t)handle
                                   error:(NSError**)error {
   char* c_error = nullptr;

@@ -53,6 +53,9 @@ typedef void (^OwlFreshMojoRuntimeEventHandler)(NSInteger kind,
                          receiverHandle:(uint64_t)receiverHandle
                                   error:(NSError**)error
     NS_SWIFT_NAME(bindSurfaceTree(remoteHandle:receiverHandle:));
+- (BOOL)bindSurfaceTreeWithReceiverHandle:(uint64_t)receiverHandle
+                                    error:(NSError**)error
+    NS_SWIFT_NAME(bindSurfaceTree(receiverHandle:));
 - (BOOL)bindNativeSurfaceHostWithHandle:(uint64_t)handle
                                   error:(NSError**)error
     NS_SWIFT_NAME(bindNativeSurfaceHost(handle:));

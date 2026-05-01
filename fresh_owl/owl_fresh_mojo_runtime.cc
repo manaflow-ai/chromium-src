@@ -692,6 +692,23 @@ int owl_fresh_mojo_session_bind_surface_tree_with_handles(
   return 0;
 }
 
+int owl_fresh_mojo_session_bind_surface_tree_receiver(
+    OwlFreshMojoSession* session,
+    uint64_t receiver_handle,
+    char** error) {
+  int validation_status = ValidateBindRequest(
+      session, receiver_handle, "OwlFreshSurfaceTreeHost",
+      session ? session->surface_tree_handle : 0, error);
+  if (validation_status != 0) {
+    return validation_status;
+  }
+  session->surface_tree_handle = receiver_handle;
+  session->owl_session->BindSurfaceTree(
+      PendingReceiverFromHandle<content::mojom::OwlFreshSurfaceTreeHost>(
+          receiver_handle));
+  return 0;
+}
+
 int owl_fresh_mojo_session_bind_native_surface_host(
     OwlFreshMojoSession* session,
     uint64_t native_surface_host_handle,

@@ -87,6 +87,10 @@ int owl_fresh_mojo_session_bind_surface_tree_with_handles(
     uint64_t remote_handle,
     uint64_t receiver_handle,
     char** error);
+int owl_fresh_mojo_session_bind_surface_tree_receiver(
+    OwlFreshMojoSession* session,
+    uint64_t receiver_handle,
+    char** error);
 int owl_fresh_mojo_session_bind_native_surface_host(
     OwlFreshMojoSession* session,
     uint64_t native_surface_host_handle,
