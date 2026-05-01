@@ -245,6 +245,15 @@ static void OwlFreshMojoRuntimeEventThunk(
       c_error, error);
 }
 
+- (BOOL)bindDevToolsHostWithReceiverHandle:(uint64_t)receiverHandle
+                                     error:(NSError**)error {
+  char* c_error = nullptr;
+  return FinishStatus(
+      owl_fresh::owl_fresh_mojo_session_bind_devtools_host_receiver(
+          _session, receiverHandle, &c_error),
+      c_error, error);
+}
+
 - (nullable NSNumber*)flushWithError:(NSError**)error {
   BOOL ok = NO;
   char* c_error = nullptr;

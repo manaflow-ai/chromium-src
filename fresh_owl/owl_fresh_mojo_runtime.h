@@ -104,6 +104,10 @@ int owl_fresh_mojo_session_bind_devtools_host_with_handles(
     uint64_t remote_handle,
     uint64_t receiver_handle,
     char** error);
+int owl_fresh_mojo_session_bind_devtools_host_receiver(
+    OwlFreshMojoSession* session,
+    uint64_t receiver_handle,
+    char** error);
 int owl_fresh_mojo_session_flush(OwlFreshMojoSession* session,
                                  bool* ok,
                                  char** error);

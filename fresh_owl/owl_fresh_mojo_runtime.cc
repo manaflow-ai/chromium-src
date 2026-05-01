@@ -765,6 +765,23 @@ int owl_fresh_mojo_session_bind_devtools_host_with_handles(
   return 0;
 }
 
+int owl_fresh_mojo_session_bind_devtools_host_receiver(
+    OwlFreshMojoSession* session,
+    uint64_t receiver_handle,
+    char** error) {
+  int validation_status = ValidateBindRequest(
+      session, receiver_handle, "OwlFreshDevToolsHost",
+      session ? session->devtools_host_handle : 0, error);
+  if (validation_status != 0) {
+    return validation_status;
+  }
+  session->devtools_host_handle = receiver_handle;
+  session->owl_session->BindDevToolsHost(
+      PendingReceiverFromHandle<content::mojom::OwlFreshDevToolsHost>(
+          receiver_handle));
+  return 0;
+}
+
 int owl_fresh_mojo_shell_execute_javascript(OwlFreshMojoSession* session,
                                             const char* script,
                                             char** result_json,

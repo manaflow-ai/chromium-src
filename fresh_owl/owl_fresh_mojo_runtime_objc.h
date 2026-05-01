@@ -67,6 +67,9 @@ typedef void (^OwlFreshMojoRuntimeEventHandler)(NSInteger kind,
                           receiverHandle:(uint64_t)receiverHandle
                                    error:(NSError**)error
     NS_SWIFT_NAME(bindDevToolsHost(remoteHandle:receiverHandle:));
+- (BOOL)bindDevToolsHostWithReceiverHandle:(uint64_t)receiverHandle
+                                     error:(NSError**)error
+    NS_SWIFT_NAME(bindDevToolsHost(receiverHandle:));
 - (nullable NSNumber*)flushWithError:(NSError**)error NS_SWIFT_NAME(flush());
 - (nullable NSString*)profilePathWithError:(NSError**)error
     NS_SWIFT_NAME(profilePath());
