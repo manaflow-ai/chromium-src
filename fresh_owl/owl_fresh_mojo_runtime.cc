@@ -38,6 +38,7 @@
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/platform/platform_channel.h"
 #include "mojo/public/cpp/system/invitation.h"
+#include "mojo/public/cpp/system/message_pipe.h"
 
 namespace owl_fresh {
 namespace {
@@ -235,6 +236,50 @@ int ValidateBindRequest(OwlFreshMojoSession* session,
   return 0;
 }
 
+int ValidateBindRequestWithHandles(OwlFreshMojoSession* session,
+                                   uint64_t remote_handle,
+                                   uint64_t receiver_handle,
+                                   const char* interface_name,
+                                   uint64_t existing_handle,
+                                   char** error) {
+  if (error) {
+    *error = nullptr;
+  }
+  if (!session) {
+    return Fail(error, "session is null");
+  }
+  if (remote_handle == 0) {
+    return Fail(error,
+                base::StrCat({interface_name, " remote handle is zero"}));
+  }
+  if (receiver_handle == 0) {
+    return Fail(error,
+                base::StrCat({interface_name, " receiver handle is zero"}));
+  }
+  if (!session->owl_session.is_bound()) {
+    return Fail(error, "OwlFreshSession is not bound");
+  }
+  if (existing_handle != 0) {
+    return Fail(error, base::StrCat({interface_name, " is already bound"}));
+  }
+  return 0;
+}
+
+mojo::ScopedMessagePipeHandle TakeScopedMessagePipeHandle(uint64_t handle) {
+  return mojo::ScopedMessagePipeHandle(
+      mojo::MessagePipeHandle(static_cast<MojoHandle>(handle)));
+}
+
+template <typename Interface>
+mojo::PendingRemote<Interface> PendingRemoteFromHandle(uint64_t handle) {
+  return mojo::PendingRemote<Interface>(TakeScopedMessagePipeHandle(handle), 0);
+}
+
+template <typename Interface>
+mojo::PendingReceiver<Interface> PendingReceiverFromHandle(uint64_t handle) {
+  return mojo::PendingReceiver<Interface>(TakeScopedMessagePipeHandle(handle));
+}
+
 void OwlFreshMojoClientImpl::OnReady(
     int32_t host_pid,
     content::mojom::OwlFreshCompositorInfoPtr compositor) {
@@ -330,7 +375,8 @@ OwlFreshMojoSession* owl_fresh_mojo_session_create(
   base::FilePath program_path(content_shell_path);
   base::CommandLine command_line(program_path);
   command_line.AppendSwitch("no-sandbox");
-  const bool visible_control_mode = std::getenv("OWL_FRESH_NO_EMBED") != nullptr;
+  const bool visible_control_mode =
+      std::getenv("OWL_FRESH_NO_EMBED") != nullptr;
   if (!visible_control_mode) {
     command_line.AppendSwitch("fresh-owl-embed");
     command_line.AppendSwitch("fresh-owl-hosted-frame-pump");
@@ -407,8 +453,7 @@ OwlFreshMojoSession* owl_fresh_mojo_session_create(
   return session.release();
 }
 
-void owl_fresh_mojo_session_destroy(
-    OwlFreshMojoSession* session) {
+void owl_fresh_mojo_session_destroy(OwlFreshMojoSession* session) {
   if (!session) {
     return;
   }
@@ -431,18 +476,16 @@ void owl_fresh_mojo_session_destroy(
   delete session;
 }
 
-int32_t owl_fresh_mojo_session_host_pid(
-    OwlFreshMojoSession* session) {
+int32_t owl_fresh_mojo_session_host_pid(OwlFreshMojoSession* session) {
   return session && session->process.IsValid() ? session->process.Pid() : -1;
 }
 
-int owl_fresh_mojo_session_set_client(
-    OwlFreshMojoSession* session,
-    uint64_t client_handle,
-    char** error) {
-  int validation_status = ValidateBindRequest(
-      session, client_handle, "OwlFreshClient", session ? session->client_handle : 0,
-      error);
+int owl_fresh_mojo_session_set_client(OwlFreshMojoSession* session,
+                                      uint64_t client_handle,
+                                      char** error) {
+  int validation_status =
+      ValidateBindRequest(session, client_handle, "OwlFreshClient",
+                          session ? session->client_handle : 0, error);
   if (validation_status != 0) {
     return validation_status;
   }
@@ -456,13 +499,34 @@ int owl_fresh_mojo_session_set_client(
   return 0;
 }
 
-int owl_fresh_mojo_session_bind_profile(
-    OwlFreshMojoSession* session,
-    uint64_t profile_handle,
-    char** error) {
-  int validation_status = ValidateBindRequest(
-      session, profile_handle, "OwlFreshProfile",
-      session ? session->profile_handle : 0, error);
+int owl_fresh_mojo_session_set_client_with_handles(OwlFreshMojoSession* session,
+                                                   uint64_t remote_handle,
+                                                   uint64_t receiver_handle,
+                                                   char** error) {
+  int validation_status = ValidateBindRequestWithHandles(
+      session, remote_handle, receiver_handle, "OwlFreshClient",
+      session ? session->client_handle : 0, error);
+  if (validation_status != 0) {
+    return validation_status;
+  }
+  session->client_handle = remote_handle;
+  session->client_impl = std::make_unique<OwlFreshMojoClientImpl>(session);
+  session->client_receiver =
+      std::make_unique<mojo::Receiver<content::mojom::OwlFreshClient>>(
+          session->client_impl.get(),
+          PendingReceiverFromHandle<content::mojom::OwlFreshClient>(
+              receiver_handle));
+  session->owl_session->SetClient(
+      PendingRemoteFromHandle<content::mojom::OwlFreshClient>(remote_handle));
+  return 0;
+}
+
+int owl_fresh_mojo_session_bind_profile(OwlFreshMojoSession* session,
+                                        uint64_t profile_handle,
+                                        char** error) {
+  int validation_status =
+      ValidateBindRequest(session, profile_handle, "OwlFreshProfile",
+                          session ? session->profile_handle : 0, error);
   if (validation_status != 0) {
     return validation_status;
   }
@@ -472,13 +536,32 @@ int owl_fresh_mojo_session_bind_profile(
   return 0;
 }
 
-int owl_fresh_mojo_session_bind_web_view(
+int owl_fresh_mojo_session_bind_profile_with_handles(
     OwlFreshMojoSession* session,
-    uint64_t web_view_handle,
+    uint64_t remote_handle,
+    uint64_t receiver_handle,
     char** error) {
-  int validation_status = ValidateBindRequest(
-      session, web_view_handle, "OwlFreshWebView",
-      session ? session->web_view_handle : 0, error);
+  int validation_status = ValidateBindRequestWithHandles(
+      session, remote_handle, receiver_handle, "OwlFreshProfile",
+      session ? session->profile_handle : 0, error);
+  if (validation_status != 0) {
+    return validation_status;
+  }
+  session->profile_handle = receiver_handle;
+  session->profile.Bind(
+      PendingRemoteFromHandle<content::mojom::OwlFreshProfile>(remote_handle));
+  session->owl_session->BindProfile(
+      PendingReceiverFromHandle<content::mojom::OwlFreshProfile>(
+          receiver_handle));
+  return 0;
+}
+
+int owl_fresh_mojo_session_bind_web_view(OwlFreshMojoSession* session,
+                                         uint64_t web_view_handle,
+                                         char** error) {
+  int validation_status =
+      ValidateBindRequest(session, web_view_handle, "OwlFreshWebView",
+                          session ? session->web_view_handle : 0, error);
   if (validation_status != 0) {
     return validation_status;
   }
@@ -488,26 +571,62 @@ int owl_fresh_mojo_session_bind_web_view(
   return 0;
 }
 
-int owl_fresh_mojo_session_bind_input(
+int owl_fresh_mojo_session_bind_web_view_with_handles(
     OwlFreshMojoSession* session,
-    uint64_t input_handle,
+    uint64_t remote_handle,
+    uint64_t receiver_handle,
     char** error) {
-  int validation_status = ValidateBindRequest(
-      session, input_handle, "OwlFreshInput",
-      session ? session->input_handle : 0, error);
+  int validation_status = ValidateBindRequestWithHandles(
+      session, remote_handle, receiver_handle, "OwlFreshWebView",
+      session ? session->web_view_handle : 0, error);
+  if (validation_status != 0) {
+    return validation_status;
+  }
+  session->web_view_handle = receiver_handle;
+  session->web_view.Bind(
+      PendingRemoteFromHandle<content::mojom::OwlFreshWebView>(remote_handle));
+  session->owl_session->BindWebView(
+      PendingReceiverFromHandle<content::mojom::OwlFreshWebView>(
+          receiver_handle));
+  return 0;
+}
+
+int owl_fresh_mojo_session_bind_input(OwlFreshMojoSession* session,
+                                      uint64_t input_handle,
+                                      char** error) {
+  int validation_status =
+      ValidateBindRequest(session, input_handle, "OwlFreshInput",
+                          session ? session->input_handle : 0, error);
   if (validation_status != 0) {
     return validation_status;
   }
   session->input_handle = input_handle;
-  session->owl_session->BindInput(
-      session->input.BindNewPipeAndPassReceiver());
+  session->owl_session->BindInput(session->input.BindNewPipeAndPassReceiver());
   return 0;
 }
 
-int owl_fresh_mojo_session_bind_surface_tree(
-    OwlFreshMojoSession* session,
-    uint64_t surface_tree_handle,
-    char** error) {
+int owl_fresh_mojo_session_bind_input_with_handles(OwlFreshMojoSession* session,
+                                                   uint64_t remote_handle,
+                                                   uint64_t receiver_handle,
+                                                   char** error) {
+  int validation_status = ValidateBindRequestWithHandles(
+      session, remote_handle, receiver_handle, "OwlFreshInput",
+      session ? session->input_handle : 0, error);
+  if (validation_status != 0) {
+    return validation_status;
+  }
+  session->input_handle = receiver_handle;
+  session->input.Bind(
+      PendingRemoteFromHandle<content::mojom::OwlFreshInput>(remote_handle));
+  session->owl_session->BindInput(
+      PendingReceiverFromHandle<content::mojom::OwlFreshInput>(
+          receiver_handle));
+  return 0;
+}
+
+int owl_fresh_mojo_session_bind_surface_tree(OwlFreshMojoSession* session,
+                                             uint64_t surface_tree_handle,
+                                             char** error) {
   int validation_status = ValidateBindRequest(
       session, surface_tree_handle, "OwlFreshSurfaceTreeHost",
       session ? session->surface_tree_handle : 0, error);
@@ -517,6 +636,27 @@ int owl_fresh_mojo_session_bind_surface_tree(
   session->surface_tree_handle = surface_tree_handle;
   session->owl_session->BindSurfaceTree(
       session->surface_tree.BindNewPipeAndPassReceiver());
+  return 0;
+}
+
+int owl_fresh_mojo_session_bind_surface_tree_with_handles(
+    OwlFreshMojoSession* session,
+    uint64_t remote_handle,
+    uint64_t receiver_handle,
+    char** error) {
+  int validation_status = ValidateBindRequestWithHandles(
+      session, remote_handle, receiver_handle, "OwlFreshSurfaceTreeHost",
+      session ? session->surface_tree_handle : 0, error);
+  if (validation_status != 0) {
+    return validation_status;
+  }
+  session->surface_tree_handle = receiver_handle;
+  session->surface_tree.Bind(
+      PendingRemoteFromHandle<content::mojom::OwlFreshSurfaceTreeHost>(
+          remote_handle));
+  session->owl_session->BindSurfaceTree(
+      PendingReceiverFromHandle<content::mojom::OwlFreshSurfaceTreeHost>(
+          receiver_handle));
   return 0;
 }
 
@@ -536,14 +676,33 @@ int owl_fresh_mojo_session_bind_native_surface_host(
   return 0;
 }
 
-
-int owl_fresh_mojo_session_bind_devtools_host(
+int owl_fresh_mojo_session_bind_native_surface_host_with_handles(
     OwlFreshMojoSession* session,
-    uint64_t devtools_host_handle,
+    uint64_t remote_handle,
+    uint64_t receiver_handle,
     char** error) {
-  int validation_status = ValidateBindRequest(
-      session, devtools_host_handle, "OwlFreshDevToolsHost",
-      session ? session->devtools_host_handle : 0, error);
+  int validation_status = ValidateBindRequestWithHandles(
+      session, remote_handle, receiver_handle, "OwlFreshNativeSurfaceHost",
+      session ? session->native_surface_host_handle : 0, error);
+  if (validation_status != 0) {
+    return validation_status;
+  }
+  session->native_surface_host_handle = receiver_handle;
+  session->native_surface_host.Bind(
+      PendingRemoteFromHandle<content::mojom::OwlFreshNativeSurfaceHost>(
+          remote_handle));
+  session->owl_session->BindNativeSurfaceHost(
+      PendingReceiverFromHandle<content::mojom::OwlFreshNativeSurfaceHost>(
+          receiver_handle));
+  return 0;
+}
+
+int owl_fresh_mojo_session_bind_devtools_host(OwlFreshMojoSession* session,
+                                              uint64_t devtools_host_handle,
+                                              char** error) {
+  int validation_status =
+      ValidateBindRequest(session, devtools_host_handle, "OwlFreshDevToolsHost",
+                          session ? session->devtools_host_handle : 0, error);
   if (validation_status != 0) {
     return validation_status;
   }
@@ -553,11 +712,31 @@ int owl_fresh_mojo_session_bind_devtools_host(
   return 0;
 }
 
-int owl_fresh_mojo_shell_execute_javascript(
+int owl_fresh_mojo_session_bind_devtools_host_with_handles(
     OwlFreshMojoSession* session,
-    const char* script,
-    char** result_json,
+    uint64_t remote_handle,
+    uint64_t receiver_handle,
     char** error) {
+  int validation_status = ValidateBindRequestWithHandles(
+      session, remote_handle, receiver_handle, "OwlFreshDevToolsHost",
+      session ? session->devtools_host_handle : 0, error);
+  if (validation_status != 0) {
+    return validation_status;
+  }
+  session->devtools_host_handle = receiver_handle;
+  session->devtools_host.Bind(
+      PendingRemoteFromHandle<content::mojom::OwlFreshDevToolsHost>(
+          remote_handle));
+  session->owl_session->BindDevToolsHost(
+      PendingReceiverFromHandle<content::mojom::OwlFreshDevToolsHost>(
+          receiver_handle));
+  return 0;
+}
+
+int owl_fresh_mojo_shell_execute_javascript(OwlFreshMojoSession* session,
+                                            const char* script,
+                                            char** result_json,
+                                            char** error) {
   if (result_json) {
     *result_json = nullptr;
   }
@@ -578,11 +757,8 @@ int owl_fresh_mojo_shell_execute_javascript(
   session->controller->ExecuteJavaScript(
       base::UTF8ToUTF16(script),
       base::BindOnce(
-          [](base::OnceClosure quit,
-             int* status,
-             char** result_json,
-             char** error,
-             base::Value result) {
+          [](base::OnceClosure quit, int* status, char** result_json,
+             char** error, base::Value result) {
             std::string json;
             if (!WriteJSON(std::move(result), &json)) {
               Fail(error, "JSONWriter failed");
@@ -599,8 +775,8 @@ int owl_fresh_mojo_shell_execute_javascript(
 }
 
 int owl_fresh_mojo_session_flush(OwlFreshMojoSession* session,
-                                             bool* ok,
-                                             char** error) {
+                                 bool* ok,
+                                 char** error) {
   if (error) {
     *error = nullptr;
   }
@@ -629,8 +805,8 @@ int owl_fresh_mojo_session_flush(OwlFreshMojoSession* session,
 }
 
 int owl_fresh_mojo_profile_get_path(OwlFreshMojoSession* session,
-                                                char** path,
-                                                char** error) {
+                                    char** path,
+                                    char** error) {
   if (path) {
     *path = nullptr;
   }
@@ -646,9 +822,7 @@ int owl_fresh_mojo_profile_get_path(OwlFreshMojoSession* session,
   int status = 1;
   base::RunLoop loop;
   session->profile->GetPath(base::BindOnce(
-      [](base::OnceClosure quit,
-         int* status,
-         char** path,
+      [](base::OnceClosure quit, int* status, char** path,
          const std::string& result) {
         if (path) {
           *path = DuplicateCString(result);
@@ -662,8 +836,8 @@ int owl_fresh_mojo_profile_get_path(OwlFreshMojoSession* session,
 }
 
 int owl_fresh_mojo_web_view_navigate(OwlFreshMojoSession* session,
-                                                 const char* url,
-                                                 char** error) {
+                                     const char* url,
+                                     char** error) {
   if (error) {
     *error = nullptr;
   }
@@ -681,10 +855,10 @@ int owl_fresh_mojo_web_view_navigate(OwlFreshMojoSession* session,
 }
 
 int owl_fresh_mojo_web_view_resize(OwlFreshMojoSession* session,
-                                               uint32_t width,
-                                               uint32_t height,
-                                               float scale,
-                                               char** error) {
+                                   uint32_t width,
+                                   uint32_t height,
+                                   float scale,
+                                   char** error) {
   if (error) {
     *error = nullptr;
   }
@@ -699,8 +873,8 @@ int owl_fresh_mojo_web_view_resize(OwlFreshMojoSession* session,
 }
 
 int owl_fresh_mojo_web_view_set_focus(OwlFreshMojoSession* session,
-                                                  bool focused,
-                                                  char** error) {
+                                      bool focused,
+                                      char** error) {
   if (error) {
     *error = nullptr;
   }
@@ -715,15 +889,15 @@ int owl_fresh_mojo_web_view_set_focus(OwlFreshMojoSession* session,
 }
 
 int owl_fresh_mojo_input_send_mouse(OwlFreshMojoSession* session,
-                                                uint32_t kind,
-                                                float x,
-                                                float y,
-                                                uint32_t button,
-                                                uint32_t click_count,
-                                                float delta_x,
-                                                float delta_y,
-                                                uint32_t modifiers,
-                                                char** error) {
+                                    uint32_t kind,
+                                    float x,
+                                    float y,
+                                    uint32_t button,
+                                    uint32_t click_count,
+                                    float delta_x,
+                                    float delta_y,
+                                    uint32_t modifiers,
+                                    char** error) {
   if (error) {
     *error = nullptr;
   }
@@ -747,11 +921,11 @@ int owl_fresh_mojo_input_send_mouse(OwlFreshMojoSession* session,
 }
 
 int owl_fresh_mojo_input_send_key(OwlFreshMojoSession* session,
-                                              bool key_down,
-                                              uint32_t key_code,
-                                              const char* text,
-                                              uint32_t modifiers,
-                                              char** error) {
+                                  bool key_down,
+                                  uint32_t key_code,
+                                  const char* text,
+                                  uint32_t modifiers,
+                                  char** error) {
   if (error) {
     *error = nullptr;
   }
@@ -815,9 +989,9 @@ int owl_fresh_mojo_surface_tree_capture_surface_json(
   }
   int status = 1;
   base::RunLoop loop;
-  session->surface_tree->CaptureSurface(base::BindOnce(
-      &FinishCaptureSurfaceJSON, loop.QuitClosure(), &status, result_json,
-      error, "CaptureSurface returned no result"));
+  session->surface_tree->CaptureSurface(
+      base::BindOnce(&FinishCaptureSurfaceJSON, loop.QuitClosure(), &status,
+                     result_json, error, "CaptureSurface returned no result"));
   loop.Run();
   return status;
 }
@@ -850,10 +1024,9 @@ int owl_fresh_mojo_surface_tree_capture_surface_by_label_json(
   return status;
 }
 
-int owl_fresh_mojo_surface_tree_get_json(
-    OwlFreshMojoSession* session,
-    char** result_json,
-    char** error) {
+int owl_fresh_mojo_surface_tree_get_json(OwlFreshMojoSession* session,
+                                         char** result_json,
+                                         char** error) {
   if (result_json) {
     *result_json = nullptr;
   }
@@ -869,10 +1042,7 @@ int owl_fresh_mojo_surface_tree_get_json(
   int status = 1;
   base::RunLoop loop;
   session->surface_tree->GetSurfaceTree(base::BindOnce(
-      [](base::OnceClosure quit,
-         int* status,
-         char** result_json,
-         char** error,
+      [](base::OnceClosure quit, int* status, char** result_json, char** error,
          content::mojom::OwlFreshSurfaceTreePtr surface_tree) {
         if (WriteDictResult(SurfaceTreeToDict(surface_tree), result_json,
                             error) == 0) {
@@ -950,8 +1120,7 @@ int owl_fresh_mojo_native_surface_cancel_active_popup(
   return status;
 }
 
-int
-owl_fresh_mojo_native_surface_select_active_file_picker_files_json(
+int owl_fresh_mojo_native_surface_select_active_file_picker_files_json(
     OwlFreshMojoSession* session,
     const char* paths_json,
     bool* ok,
@@ -1031,11 +1200,10 @@ int owl_fresh_mojo_native_surface_cancel_active_file_picker(
   return status;
 }
 
-
 int owl_fresh_mojo_devtools_open(OwlFreshMojoSession* session,
-                                              uint32_t mode,
-                                              bool* ok,
-                                              char** error) {
+                                 uint32_t mode,
+                                 bool* ok,
+                                 char** error) {
   if (ok) {
     *ok = false;
   }
@@ -1066,8 +1234,8 @@ int owl_fresh_mojo_devtools_open(OwlFreshMojoSession* session,
 }
 
 int owl_fresh_mojo_devtools_close(OwlFreshMojoSession* session,
-                                               bool* ok,
-                                               char** error) {
+                                  bool* ok,
+                                  char** error) {
   if (ok) {
     *ok = false;
   }
@@ -1095,11 +1263,10 @@ int owl_fresh_mojo_devtools_close(OwlFreshMojoSession* session,
   return status;
 }
 
-int owl_fresh_mojo_devtools_evaluate_javascript(
-    OwlFreshMojoSession* session,
-    const char* script,
-    char** result_json,
-    char** error) {
+int owl_fresh_mojo_devtools_evaluate_javascript(OwlFreshMojoSession* session,
+                                                const char* script,
+                                                char** result_json,
+                                                char** error) {
   if (result_json) {
     *result_json = nullptr;
   }
@@ -1118,17 +1285,14 @@ int owl_fresh_mojo_devtools_evaluate_javascript(
   int status = 1;
   base::RunLoop loop;
   session->devtools_host->EvaluateDevToolsJavaScript(
-      script,
-      base::BindOnce(
-          [](base::OnceClosure quit,
-             int* status,
-             char** result_json,
-             const std::string& result) {
-            Succeed(result_json, result);
-            *status = 0;
-            std::move(quit).Run();
-          },
-          loop.QuitClosure(), &status, result_json));
+      script, base::BindOnce(
+                  [](base::OnceClosure quit, int* status, char** result_json,
+                     const std::string& result) {
+                    Succeed(result_json, result);
+                    *status = 0;
+                    std::move(quit).Run();
+                  },
+                  loop.QuitClosure(), &status, result_json));
   loop.Run();
   return status;
 }

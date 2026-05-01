@@ -46,25 +46,58 @@ int owl_fresh_mojo_shell_execute_javascript(OwlFreshMojoSession* session,
 int owl_fresh_mojo_session_set_client(OwlFreshMojoSession* session,
                                       uint64_t client_handle,
                                       char** error);
+int owl_fresh_mojo_session_set_client_with_handles(OwlFreshMojoSession* session,
+                                                   uint64_t remote_handle,
+                                                   uint64_t receiver_handle,
+                                                   char** error);
 int owl_fresh_mojo_session_bind_profile(OwlFreshMojoSession* session,
                                         uint64_t profile_handle,
                                         char** error);
+int owl_fresh_mojo_session_bind_profile_with_handles(
+    OwlFreshMojoSession* session,
+    uint64_t remote_handle,
+    uint64_t receiver_handle,
+    char** error);
 int owl_fresh_mojo_session_bind_web_view(OwlFreshMojoSession* session,
                                          uint64_t web_view_handle,
                                          char** error);
+int owl_fresh_mojo_session_bind_web_view_with_handles(
+    OwlFreshMojoSession* session,
+    uint64_t remote_handle,
+    uint64_t receiver_handle,
+    char** error);
 int owl_fresh_mojo_session_bind_input(OwlFreshMojoSession* session,
                                       uint64_t input_handle,
                                       char** error);
+int owl_fresh_mojo_session_bind_input_with_handles(OwlFreshMojoSession* session,
+                                                   uint64_t remote_handle,
+                                                   uint64_t receiver_handle,
+                                                   char** error);
 int owl_fresh_mojo_session_bind_surface_tree(OwlFreshMojoSession* session,
                                              uint64_t surface_tree_handle,
                                              char** error);
+int owl_fresh_mojo_session_bind_surface_tree_with_handles(
+    OwlFreshMojoSession* session,
+    uint64_t remote_handle,
+    uint64_t receiver_handle,
+    char** error);
 int owl_fresh_mojo_session_bind_native_surface_host(
     OwlFreshMojoSession* session,
     uint64_t native_surface_host_handle,
     char** error);
+int owl_fresh_mojo_session_bind_native_surface_host_with_handles(
+    OwlFreshMojoSession* session,
+    uint64_t remote_handle,
+    uint64_t receiver_handle,
+    char** error);
 int owl_fresh_mojo_session_bind_devtools_host(OwlFreshMojoSession* session,
-                                             uint64_t devtools_host_handle,
-                                             char** error);
+                                              uint64_t devtools_host_handle,
+                                              char** error);
+int owl_fresh_mojo_session_bind_devtools_host_with_handles(
+    OwlFreshMojoSession* session,
+    uint64_t remote_handle,
+    uint64_t receiver_handle,
+    char** error);
 int owl_fresh_mojo_session_flush(OwlFreshMojoSession* session,
                                  bool* ok,
                                  char** error);
