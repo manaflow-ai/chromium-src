@@ -126,6 +126,14 @@ static void OwlFreshMojoRuntimeEventThunk(
                       c_error, error);
 }
 
+- (BOOL)setClientWithRemoteHandle:(uint64_t)remoteHandle
+                            error:(NSError**)error {
+  char* c_error = nullptr;
+  return FinishStatus(owl_fresh::owl_fresh_mojo_session_set_client_remote(
+                          _session, remoteHandle, &c_error),
+                      c_error, error);
+}
+
 - (BOOL)bindProfileWithHandle:(uint64_t)handle error:(NSError**)error {
   char* c_error = nullptr;
   return FinishStatus(owl_fresh::owl_fresh_mojo_session_bind_profile(

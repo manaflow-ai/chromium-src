@@ -20,6 +20,9 @@ typedef void (^OwlFreshMojoRuntimeEventHandler)(NSInteger kind,
                    receiverHandle:(uint64_t)receiverHandle
                             error:(NSError**)error
     NS_SWIFT_NAME(setClient(remoteHandle:receiverHandle:));
+- (BOOL)setClientWithRemoteHandle:(uint64_t)remoteHandle
+                            error:(NSError**)error
+    NS_SWIFT_NAME(setClient(remoteHandle:));
 - (BOOL)bindProfileWithHandle:(uint64_t)handle
                         error:(NSError**)error
     NS_SWIFT_NAME(bindProfile(handle:));

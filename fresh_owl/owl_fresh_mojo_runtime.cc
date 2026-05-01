@@ -521,6 +521,23 @@ int owl_fresh_mojo_session_set_client_with_handles(OwlFreshMojoSession* session,
   return 0;
 }
 
+int owl_fresh_mojo_session_set_client_remote(OwlFreshMojoSession* session,
+                                             uint64_t remote_handle,
+                                             char** error) {
+  int validation_status =
+      ValidateBindRequest(session, remote_handle, "OwlFreshClient",
+                          session ? session->client_handle : 0, error);
+  if (validation_status != 0) {
+    return validation_status;
+  }
+  session->client_handle = remote_handle;
+  session->client_impl.reset();
+  session->client_receiver.reset();
+  session->owl_session->SetClient(
+      PendingRemoteFromHandle<content::mojom::OwlFreshClient>(remote_handle));
+  return 0;
+}
+
 int owl_fresh_mojo_session_bind_profile(OwlFreshMojoSession* session,
                                         uint64_t profile_handle,
                                         char** error) {

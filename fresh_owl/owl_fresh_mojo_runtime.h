@@ -50,6 +50,9 @@ int owl_fresh_mojo_session_set_client_with_handles(OwlFreshMojoSession* session,
                                                    uint64_t remote_handle,
                                                    uint64_t receiver_handle,
                                                    char** error);
+int owl_fresh_mojo_session_set_client_remote(OwlFreshMojoSession* session,
+                                             uint64_t remote_handle,
+                                             char** error);
 int owl_fresh_mojo_session_bind_profile(OwlFreshMojoSession* session,
                                         uint64_t profile_handle,
                                         char** error);
