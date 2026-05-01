@@ -5,7 +5,10 @@
 #ifndef MOJO_PUBLIC_C_SYSTEM_SYSTEM_EXPORT_H_
 #define MOJO_PUBLIC_C_SYSTEM_SYSTEM_EXPORT_H_
 
-#if defined(COMPONENT_BUILD)
+#if defined(MOJO_SYSTEM_FORCE_EXPORT)
+#define MOJO_SYSTEM_EXPORT __attribute__((visibility("default")))
+
+#elif defined(COMPONENT_BUILD)
 #if defined(WIN32)
 
 #if defined(MOJO_SYSTEM_IMPLEMENTATION)

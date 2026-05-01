@@ -9,7 +9,10 @@ component("system") {
 
   configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
-  defines = [ "MOJO_SYSTEM_IMPLEMENTATION" ]
+  defines = [
+    "MOJO_SYSTEM_FORCE_EXPORT",
+    "MOJO_SYSTEM_IMPLEMENTATION",
+  ]
 
   public_deps = [ ":headers" ]
 
