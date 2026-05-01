@@ -591,6 +591,22 @@ int owl_fresh_mojo_session_bind_web_view_with_handles(
   return 0;
 }
 
+int owl_fresh_mojo_session_bind_web_view_receiver(OwlFreshMojoSession* session,
+                                                  uint64_t receiver_handle,
+                                                  char** error) {
+  int validation_status =
+      ValidateBindRequest(session, receiver_handle, "OwlFreshWebView",
+                          session ? session->web_view_handle : 0, error);
+  if (validation_status != 0) {
+    return validation_status;
+  }
+  session->web_view_handle = receiver_handle;
+  session->owl_session->BindWebView(
+      PendingReceiverFromHandle<content::mojom::OwlFreshWebView>(
+          receiver_handle));
+  return 0;
+}
+
 int owl_fresh_mojo_session_bind_input(OwlFreshMojoSession* session,
                                       uint64_t input_handle,
                                       char** error) {

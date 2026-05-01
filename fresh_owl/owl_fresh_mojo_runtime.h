@@ -66,6 +66,9 @@ int owl_fresh_mojo_session_bind_web_view_with_handles(
     uint64_t remote_handle,
     uint64_t receiver_handle,
     char** error);
+int owl_fresh_mojo_session_bind_web_view_receiver(OwlFreshMojoSession* session,
+                                                  uint64_t receiver_handle,
+                                                  char** error);
 int owl_fresh_mojo_session_bind_input(OwlFreshMojoSession* session,
                                       uint64_t input_handle,
                                       char** error);

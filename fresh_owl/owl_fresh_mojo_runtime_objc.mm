@@ -160,6 +160,14 @@ static void OwlFreshMojoRuntimeEventThunk(
       c_error, error);
 }
 
+- (BOOL)bindWebViewWithReceiverHandle:(uint64_t)receiverHandle
+                                error:(NSError**)error {
+  char* c_error = nullptr;
+  return FinishStatus(owl_fresh::owl_fresh_mojo_session_bind_web_view_receiver(
+                          _session, receiverHandle, &c_error),
+                      c_error, error);
+}
+
 - (BOOL)bindInputWithHandle:(uint64_t)handle error:(NSError**)error {
   char* c_error = nullptr;
   return FinishStatus(
