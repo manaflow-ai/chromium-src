@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "base/command_line.h"
+#include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "content/public/browser/context_menu_params.h"
 #include "content/public/browser/render_frame_host.h"
@@ -67,6 +68,9 @@ enum {
 
 namespace {
 
+content::ShellWebContentsViewDelegate* g_owl_fresh_active_context_menu =
+    nullptr;
+
 NSMenuItem* MakeContextMenuItem(NSString* title,
                                 NSInteger tag,
                                 NSMenu* menu,
@@ -84,17 +88,38 @@ NSMenuItem* MakeContextMenuItem(NSString* title,
   return menu_item;
 }
 
-std::vector<std::string> MenuItemTitles(NSMenu* menu) {
-  std::vector<std::string> titles;
+std::string MenuItemTitle(NSMenuItem* item) {
+  const char* title = item.title.UTF8String;
+  return title ? title : "";
+}
+
+std::vector<ui::OwlFreshNativeMenuItem> NativeMenuItems(NSMenu* menu) {
+  std::vector<ui::OwlFreshNativeMenuItem> items;
   for (NSMenuItem* item in menu.itemArray) {
+    ui::OwlFreshNativeMenuItem fresh_item;
     if (item.separatorItem) {
-      titles.push_back("---");
+      fresh_item.separator = true;
+      fresh_item.enabled = false;
+      fresh_item.label = "---";
+      items.push_back(fresh_item);
       continue;
     }
-    const char* title = item.title.UTF8String;
-    titles.push_back(title ? title : "");
+    fresh_item.label = MenuItemTitle(item);
+    fresh_item.tool_tip = item.toolTip.UTF8String ? item.toolTip.UTF8String : "";
+    fresh_item.enabled = item.enabled;
+    items.push_back(fresh_item);
   }
-  return titles;
+  return items;
+}
+
+std::vector<int> MenuItemTags(NSMenu* menu) {
+  std::vector<int> tags;
+  for (NSMenuItem* item in menu.itemArray) {
+    tags.push_back((item.separatorItem || !item.enabled)
+                       ? -1
+                       : static_cast<int>(item.tag));
+  }
+  return tags;
 }
 
 }  // namespace
@@ -111,11 +136,22 @@ ShellWebContentsViewDelegate::ShellWebContentsViewDelegate(
     : web_contents_(web_contents) {
 }
 
-ShellWebContentsViewDelegate::~ShellWebContentsViewDelegate() = default;
+ShellWebContentsViewDelegate::~ShellWebContentsViewDelegate() {
+  if (g_owl_fresh_active_context_menu == this) {
+    g_owl_fresh_active_context_menu = nullptr;
+    ui::OwlFreshClearNativeMenuSurfaces();
+  }
+}
 
 void ShellWebContentsViewDelegate::ShowContextMenu(
     RenderFrameHost& render_frame_host,
     const ContextMenuParams& params) {
+  VLOG(1) << "ShellWebContentsViewDelegate::ShowContextMenu x=" << params.x
+          << " y=" << params.y << " editable=" << params.is_editable
+          << " selection=" << params.selection_text.size()
+          << " fresh="
+          << base::CommandLine::ForCurrentProcess()->HasSwitch(
+                 "fresh-owl-embed");
   if (switches::IsRunWebTestsSwitchPresent()) {
     return;
   }
@@ -222,11 +258,16 @@ void ShellWebContentsViewDelegate::ShowContextMenu(
                       delegate);
 
   if (base::CommandLine::ForCurrentProcess()->HasSwitch("fresh-owl-embed")) {
+    ui::OwlFreshClearNativeMenuSurfaces();
+    g_owl_fresh_active_context_menu = this;
+    owl_fresh_context_menu_item_tags_ = MenuItemTags(menu);
+    VLOG(1) << "Publishing Owl Fresh context menu items="
+            << owl_fresh_context_menu_item_tags_.size();
     ui::OwlFreshPublishNativeMenuSurface(
         reinterpret_cast<uint64_t>(this),
         reinterpret_cast<uint64_t>(web_contents_->GetRenderWidgetHostView()),
-        CGRectMake(params.x, params.y, 1, 1), 1.0f, MenuItemTitles(menu),
-        std::vector<ui::OwlFreshNativeMenuItem>(), -1, 0.0f, false,
+        CGRectMake(params.x, params.y, 1, 1), 1.0f, std::vector<std::string>(),
+        NativeMenuItems(menu), -1, 0.0f, false,
         "context-menu");
     return;
   }
@@ -289,6 +330,54 @@ void ShellWebContentsViewDelegate::ActionPerformed(int tag) {
       break;
     }
   }
+}
+
+bool ShellWebContentsViewDelegate::OwlFreshAcceptContextMenuItem(
+    uint32_t selected_item) {
+  if (selected_item >= owl_fresh_context_menu_item_tags_.size()) {
+    ui::OwlFreshClearNativeMenuSurfaces();
+    owl_fresh_context_menu_item_tags_.clear();
+    if (g_owl_fresh_active_context_menu == this) {
+      g_owl_fresh_active_context_menu = nullptr;
+    }
+    return false;
+  }
+
+  const int tag = owl_fresh_context_menu_item_tags_[selected_item];
+  ui::OwlFreshClearNativeMenuSurfaces();
+  owl_fresh_context_menu_item_tags_.clear();
+  if (g_owl_fresh_active_context_menu == this) {
+    g_owl_fresh_active_context_menu = nullptr;
+  }
+  if (tag < 0) {
+    return false;
+  }
+  ActionPerformed(tag);
+  return true;
+}
+
+bool ShellWebContentsViewDelegate::OwlFreshCancelContextMenu() {
+  ui::OwlFreshClearNativeMenuSurfaces();
+  owl_fresh_context_menu_item_tags_.clear();
+  if (g_owl_fresh_active_context_menu == this) {
+    g_owl_fresh_active_context_menu = nullptr;
+  }
+  return true;
+}
+
+bool OwlFreshAcceptActiveContextMenuItem(uint32_t selected_item) {
+  if (!g_owl_fresh_active_context_menu) {
+    return false;
+  }
+  return g_owl_fresh_active_context_menu->OwlFreshAcceptContextMenuItem(
+      selected_item);
+}
+
+bool OwlFreshCancelActiveContextMenu() {
+  if (!g_owl_fresh_active_context_menu) {
+    return false;
+  }
+  return g_owl_fresh_active_context_menu->OwlFreshCancelContextMenu();
 }
 
 NSObject<RenderWidgetHostViewMacDelegate>*

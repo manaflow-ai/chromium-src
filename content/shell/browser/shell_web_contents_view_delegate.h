@@ -6,6 +6,8 @@
 #define CONTENT_SHELL_BROWSER_SHELL_WEB_CONTENTS_VIEW_DELEGATE_H_
 
 #include <memory>
+#include <stdint.h>
+#include <vector>
 
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
@@ -38,6 +40,8 @@ class ShellWebContentsViewDelegate : public WebContentsViewDelegate {
 
 #if BUILDFLAG(IS_MAC)
   void ActionPerformed(int id);
+  bool OwlFreshAcceptContextMenuItem(uint32_t selected_item);
+  bool OwlFreshCancelContextMenu();
   NSObject<RenderWidgetHostViewMacDelegate>* GetDelegateForHost(
       content::RenderWidgetHost* render_widget_host,
       bool is_popup) override;
@@ -47,6 +51,7 @@ class ShellWebContentsViewDelegate : public WebContentsViewDelegate {
   raw_ptr<WebContents> web_contents_;
 #if BUILDFLAG(IS_MAC)
   ContextMenuParams params_;
+  std::vector<int> owl_fresh_context_menu_item_tags_;
 #endif
 
 #if BUILDFLAG(IS_IOS)
@@ -59,6 +64,11 @@ class ShellWebContentsViewDelegate : public WebContentsViewDelegate {
   std::unique_ptr<views::MenuRunner> context_menu_runner_;
 #endif
 };
+
+#if BUILDFLAG(IS_MAC)
+bool OwlFreshAcceptActiveContextMenuItem(uint32_t selected_item);
+bool OwlFreshCancelActiveContextMenu();
+#endif
 
 }  // namespace content
 

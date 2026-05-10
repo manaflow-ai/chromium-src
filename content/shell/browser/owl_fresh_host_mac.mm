@@ -16,6 +16,7 @@
 #include "base/files/file_path.h"
 #include "base/functional/bind.h"
 #include "base/json/json_writer.h"
+#include "base/logging.h"
 #include "base/memory/weak_ptr.h"
 #include "base/process/process.h"
 #include "base/strings/strcat.h"
@@ -48,6 +49,7 @@
 #include "content/public/browser/web_contents_observer.h"
 #include "content/shell/browser/shell.h"
 #include "content/shell/browser/shell_devtools_frontend.h"
+#include "content/shell/browser/shell_web_contents_view_delegate.h"
 #include "media/base/video_frame.h"
 #include "media/base/video_types.h"
 #include "media/capture/mojom/video_capture_buffer.mojom.h"
@@ -1436,7 +1438,10 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
   void AcceptActivePopupMenuItem(
       uint32_t index,
       AcceptActivePopupMenuItemCallback callback) override {
-    const bool ok = OwlFreshAcceptActivePopupMenuItem(index);
+    bool ok = OwlFreshAcceptActivePopupMenuItem(index);
+    if (!ok) {
+      ok = OwlFreshAcceptActiveContextMenuItem(index);
+    }
     if (client_) {
       client_->OnSurfaceTreeChanged(SurfaceTreeFromRegistry());
     }
@@ -1444,7 +1449,10 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
   }
 
   void CancelActivePopup(CancelActivePopupCallback callback) override {
-    const bool ok = OwlFreshCancelActivePopupMenu();
+    bool ok = OwlFreshCancelActivePopupMenu();
+    if (!ok) {
+      ok = OwlFreshCancelActiveContextMenu();
+    }
     ui::OwlFreshClearNativeMenuSurfaces();
     if (client_) {
       client_->OnSurfaceTreeChanged(SurfaceTreeFromRegistry());
@@ -2031,6 +2039,7 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
   }
 
   void Log(const std::string& message) {
+    VLOG(1) << message;
     if (client_) {
       client_->OnHostLog(message);
     }

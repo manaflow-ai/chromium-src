@@ -455,7 +455,7 @@ void OwlFreshPublishNativeMenuSurface(
     float item_font_size,
     bool right_aligned,
     const std::string& label) {
-  if (surface_key == 0 || items.empty()) {
+  if (surface_key == 0 || (items.empty() && native_items.empty())) {
     return;
   }
   OwlFreshSurfaceRecord& record = EnsureSurfaceRecord(surface_key);
