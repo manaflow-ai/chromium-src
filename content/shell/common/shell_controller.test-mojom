@@ -51,6 +51,20 @@ struct OwlFreshKeyEvent {
   string characters_ignoring_modifiers;
 };
 
+enum OwlFreshCompositionKind {
+  kSet = 0,
+  kCommit = 1,
+  kFinish = 2,
+};
+
+struct OwlFreshCompositionEvent {
+  OwlFreshCompositionKind kind;
+  string text;
+  uint32 selection_start;
+  uint32 selection_end;
+  bool keep_selection;
+};
+
 struct OwlFreshCompositorInfo {
   uint32 context_id;
 };
@@ -164,6 +178,7 @@ interface OwlFreshInput {
   SendMouse(OwlFreshMouseEvent event);
   SendWheel(OwlFreshWheelEvent event);
   SendKey(OwlFreshKeyEvent event);
+  SendComposition(OwlFreshCompositionEvent event);
 };
 
 interface OwlFreshSurfaceTreeHost {

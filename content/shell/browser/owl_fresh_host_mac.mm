@@ -63,12 +63,14 @@
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/accelerated_widget_mac/owl_fresh_context.h"
 #include "ui/base/cocoa/remote_layer_api.h"
+#include "ui/base/ime/ime_text_span.h"
 #include "ui/events/blink/web_input_event.h"
 #include "ui/events/keycodes/dom/dom_key.h"
 #include "ui/gfx/codec/png_codec.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/image/image.h"
+#include "ui/gfx/range/range.h"
 #include "ui/gfx/native_ui_types.h"
 #include "ui/snapshot/snapshot.h"
 #include "url/gurl.h"
@@ -1348,6 +1350,61 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
       host->ForwardKeyboardEvent(char_event);
       Log("SendKey forwarded char event");
     }
+    EnsureRenderWidgetProducingFramesForOwlFresh();
+    MarkLayerFixtureInput();
+  }
+
+  void SendComposition(mojom::OwlFreshCompositionEventPtr event) override {
+    if (!event) {
+      Log("SendComposition dropped: missing event");
+      return;
+    }
+    WebContents* contents = CurrentWebContents();
+    if (!contents) {
+      Log("SendComposition dropped: no WebContents");
+      return;
+    }
+    auto* web_contents_impl = static_cast<WebContentsImpl*>(contents);
+    RenderWidgetHostView* view = contents->GetRenderWidgetHostView();
+    RenderWidgetHostImpl* host =
+        web_contents_impl->GetRenderWidgetHostWithPageFocus();
+    if (!host && view) {
+      host = static_cast<RenderWidgetHostImpl*>(view->GetRenderWidgetHost());
+    }
+    if (!host) {
+      Log("SendComposition dropped: no RenderWidgetHost");
+      return;
+    }
+
+    host->input_router()->MakeActive();
+    host->SetActive(true);
+    host->Focus();
+
+    const std::u16string text = base::UTF8ToUTF16(event->text);
+    switch (event->kind) {
+      case mojom::OwlFreshCompositionKind::kSet: {
+        const uint32_t text_length = static_cast<uint32_t>(text.length());
+        const int selection_start =
+            static_cast<int>(std::min(event->selection_start, text_length));
+        const int selection_end =
+            static_cast<int>(std::min(event->selection_end, text_length));
+        host->ImeSetComposition(text, std::vector<ui::ImeTextSpan>(),
+                                gfx::Range::InvalidRange(), selection_start,
+                                selection_end);
+        Log("SendComposition forwarded set composition");
+        break;
+      }
+      case mojom::OwlFreshCompositionKind::kCommit:
+        host->ImeCommitText(text, std::vector<ui::ImeTextSpan>(),
+                            gfx::Range::InvalidRange(), 0);
+        Log("SendComposition forwarded commit text");
+        break;
+      case mojom::OwlFreshCompositionKind::kFinish:
+        host->ImeFinishComposingText(event->keep_selection);
+        Log("SendComposition forwarded finish composing text");
+        break;
+    }
+
     EnsureRenderWidgetProducingFramesForOwlFresh();
     MarkLayerFixtureInput();
   }
