@@ -168,6 +168,34 @@ int GetCrashSignalFD(const base::CommandLine& command_line) {
 #endif
 
 class ShellControllerImpl : public mojom::ShellController {
+ private:
+  class ExecuteJavaScriptCallbackGuard {
+   public:
+    explicit ExecuteJavaScriptCallbackGuard(ExecuteJavaScriptCallback callback)
+        : callback_(std::move(callback)) {}
+
+    ExecuteJavaScriptCallbackGuard(const ExecuteJavaScriptCallbackGuard&) =
+        delete;
+    ExecuteJavaScriptCallbackGuard& operator=(
+        const ExecuteJavaScriptCallbackGuard&) = delete;
+
+    ~ExecuteJavaScriptCallbackGuard() {
+      if (callback_) {
+        std::move(callback_).Run(
+            base::Value("JavaScript execution was interrupted"));
+      }
+    }
+
+    void Run(base::Value value) {
+      if (callback_) {
+        std::move(callback_).Run(std::move(value));
+      }
+    }
+
+   private:
+    ExecuteJavaScriptCallback callback_;
+  };
+
  public:
   ShellControllerImpl() = default;
   ~ShellControllerImpl() override = default;
@@ -185,10 +213,27 @@ class ShellControllerImpl : public mojom::ShellController {
 
   void ExecuteJavaScript(const std::u16string& script,
                          ExecuteJavaScriptCallback callback) override {
-    CHECK(!Shell::windows().empty());
+    if (Shell::windows().empty()) {
+      std::move(callback).Run(base::Value("No shell window is available"));
+      return;
+    }
     WebContents* contents = Shell::windows()[0]->web_contents();
-    contents->GetPrimaryMainFrame()->ExecuteJavaScriptForTests(
-        script, std::move(callback), ISOLATED_WORLD_ID_GLOBAL);
+    if (!contents) {
+      std::move(callback).Run(base::Value("No WebContents is available"));
+      return;
+    }
+    RenderFrameHost* frame = contents->GetPrimaryMainFrame();
+    if (!frame || !frame->IsRenderFrameLive()) {
+      std::move(callback).Run(base::Value("Primary frame is not ready"));
+      return;
+    }
+    auto guarded_callback =
+        std::make_unique<ExecuteJavaScriptCallbackGuard>(std::move(callback));
+    frame->ExecuteJavaScriptForTests(
+        script,
+        base::BindOnce(&ExecuteJavaScriptCallbackGuard::Run,
+                       std::move(guarded_callback)),
+        ISOLATED_WORLD_ID_GLOBAL);
   }
 
   void ShutDown() override { Shell::Shutdown(); }

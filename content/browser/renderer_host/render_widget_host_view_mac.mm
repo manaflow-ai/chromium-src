@@ -722,6 +722,9 @@ bool RenderWidgetHostViewMac::IsPointerLocked() {
 }
 
 void RenderWidgetHostViewMac::UpdateCursor(const ui::Cursor& cursor) {
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch("fresh-owl-embed")) {
+    ui::OwlFreshSetLatestCursorType(static_cast<int32_t>(cursor.type()));
+  }
   GetCursorManager()->UpdateCursor(this, cursor);
 }
 

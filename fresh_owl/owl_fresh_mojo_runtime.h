@@ -21,13 +21,17 @@ enum OwlFreshMojoEventKind {
   kOwlFreshMojoEventNavigation = 4,
   kOwlFreshMojoEventDisconnected = 5,
   kOwlFreshMojoEventSurfaceTree = 6,
+  kOwlFreshMojoEventCursor = 7,
 };
 
 struct OwlFreshMojoEvent {
   OwlFreshMojoEventKind kind;
   uint32_t context_id;
   int32_t host_pid;
+  int32_t cursor_type;
   bool loading;
+  bool can_go_back;
+  bool can_go_forward;
   const char* url;
   const char* title;
   const char* message;

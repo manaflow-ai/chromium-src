@@ -25,11 +25,30 @@ struct OwlFreshMouseEvent {
   uint32 modifiers;
 };
 
+struct OwlFreshWheelEvent {
+  float x;
+  float y;
+  float delta_x;
+  float delta_y;
+  float wheel_ticks_x;
+  float wheel_ticks_y;
+  uint32 phase;
+  uint32 momentum_phase;
+  uint32 modifiers;
+  uint32 delta_units;
+};
+
 struct OwlFreshKeyEvent {
   bool key_down;
   uint32 key_code;
   string text;
   uint32 modifiers;
+  array<string> edit_commands;
+  uint32 native_event_type;
+  uint32 native_key_code;
+  bool is_repeat;
+  string characters;
+  string characters_ignoring_modifiers;
 };
 
 struct OwlFreshCompositorInfo {
@@ -98,12 +117,22 @@ struct OwlFreshCaptureResult {
   string error;
 };
 
+struct OwlFreshCursorInfo {
+  int32 type;
+};
+
 interface OwlFreshClient {
   OnReady(int32 host_pid, OwlFreshCompositorInfo compositor);
   OnCompositorChanged(OwlFreshCompositorInfo compositor);
   OnSurfaceTreeChanged(OwlFreshSurfaceTree surface_tree);
-  OnNavigationChanged(string url, string title, bool loading);
+  OnNavigationChanged(
+      string url,
+      string title,
+      bool loading,
+      bool can_go_back,
+      bool can_go_forward);
   OnHostLog(string message);
+  OnCursorChanged(OwlFreshCursorInfo cursor);
 };
 
 interface OwlFreshSession {
@@ -125,10 +154,15 @@ interface OwlFreshWebView {
   Navigate(string url);
   Resize(uint32 width, uint32 height, float scale);
   SetFocus(bool focused);
+  GoBack();
+  GoForward();
+  Reload();
+  StopLoading();
 };
 
 interface OwlFreshInput {
   SendMouse(OwlFreshMouseEvent event);
+  SendWheel(OwlFreshWheelEvent event);
   SendKey(OwlFreshKeyEvent event);
 };
 

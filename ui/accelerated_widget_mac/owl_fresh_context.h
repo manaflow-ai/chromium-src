@@ -72,6 +72,8 @@ struct OwlFreshSurfaceSnapshot {
 
 ACCELERATED_WIDGET_MAC_EXPORT void OwlFreshSetLatestContextID(uint32_t id);
 ACCELERATED_WIDGET_MAC_EXPORT uint32_t OwlFreshLatestContextID();
+ACCELERATED_WIDGET_MAC_EXPORT void OwlFreshSetLatestCursorType(int32_t type);
+ACCELERATED_WIDGET_MAC_EXPORT int32_t OwlFreshLatestCursorType();
 ACCELERATED_WIDGET_MAC_EXPORT void OwlFreshSetDevToolsSurfaceLabel(
     const std::string& label);
 ACCELERATED_WIDGET_MAC_EXPORT std::string OwlFreshDevToolsSurfaceLabel();

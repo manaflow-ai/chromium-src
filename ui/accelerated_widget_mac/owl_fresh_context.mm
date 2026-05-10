@@ -60,6 +60,7 @@ struct OwlFreshDevToolsDockLayout {
 std::atomic<uint32_t> g_legacy_context_id{0};
 std::atomic<uint32_t> g_portal_context_id{0};
 std::atomic<uint64_t> g_portal_generation{0};
+std::atomic<int32_t> g_cursor_type{0};
 
 std::string& DevToolsSurfaceLabelStorage() {
   static base::NoDestructor<std::string> label("devtools-bottom");
@@ -225,6 +226,14 @@ uint32_t OwlFreshLatestContextID() {
 
 uint64_t OwlFreshDisplayPortalGeneration() {
   return g_portal_generation.load(std::memory_order_relaxed);
+}
+
+void OwlFreshSetLatestCursorType(int32_t type) {
+  g_cursor_type.store(type, std::memory_order_relaxed);
+}
+
+int32_t OwlFreshLatestCursorType() {
+  return g_cursor_type.load(std::memory_order_relaxed);
 }
 
 void OwlFreshSetDevToolsSurfaceLabel(const std::string& label) {

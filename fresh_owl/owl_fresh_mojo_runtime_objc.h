@@ -6,6 +6,8 @@ typedef void (^OwlFreshMojoRuntimeEventHandler)(NSInteger kind,
                                                 uint32_t contextID,
                                                 int32_t hostPID,
                                                 BOOL loading,
+                                                BOOL canGoBack,
+                                                BOOL canGoForward,
                                                 NSString* _Nullable url,
                                                 NSString* _Nullable title,
                                                 NSString* _Nullable message);

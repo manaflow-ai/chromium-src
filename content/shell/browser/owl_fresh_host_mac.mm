@@ -4,11 +4,13 @@
 #import <QuartzCore/QuartzCore.h>
 
 #include <algorithm>
+#include <limits>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "base/apple/owned_objc.h"
 #include "base/command_line.h"
 #include "base/containers/span.h"
 #include "base/files/file_path.h"
@@ -29,16 +31,21 @@
 #include "content/browser/devtools/devtools_video_consumer.h"
 #include "content/browser/renderer_host/owl_fresh_web_contents_role.h"
 #include "content/browser/renderer_host/popup_menu_helper_mac.h"
+#include "content/browser/renderer_host/input/mouse_wheel_phase_handler.h"
 #include "content/browser/renderer_host/render_widget_host_impl.h"
 #include "content/browser/renderer_host/render_widget_host_view_base.h"
+#include "content/browser/renderer_host/render_widget_host_view_mac.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/file_select_listener.h"
+#include "content/public/browser/navigation_entry.h"
+#include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_widget_host.h"
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/browser/web_contents_observer.h"
 #include "content/shell/browser/shell.h"
 #include "content/shell/browser/shell_devtools_frontend.h"
 #include "media/base/video_frame.h"
@@ -52,9 +59,12 @@
 #include "third_party/blink/public/common/input/web_mouse_event.h"
 #include "third_party/blink/public/common/input/web_mouse_wheel_event.h"
 #include "third_party/blink/public/mojom/choosers/file_chooser.mojom.h"
+#include "third_party/blink/public/mojom/input/input_handler.mojom.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/accelerated_widget_mac/owl_fresh_context.h"
 #include "ui/base/cocoa/remote_layer_api.h"
+#include "ui/events/blink/web_input_event.h"
+#include "ui/events/keycodes/dom/dom_key.h"
 #include "ui/gfx/codec/png_codec.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
@@ -107,6 +117,55 @@ Shell* CurrentShell() {
 WebContents* CurrentWebContents() {
   Shell* shell = CurrentShell();
   return shell ? shell->web_contents() : nullptr;
+}
+
+void SetShellWindowHiddenForOwlFresh(Shell* shell) {
+  if (!shell) {
+    return;
+  }
+  NSWindow* window = shell->window().GetNativeNSWindow();
+  if (!window) {
+    return;
+  }
+  window.alphaValue = 0.01;
+  window.level = NSWindowLevel(NSNormalWindowLevel - 1000);
+  window.collectionBehavior =
+      NSWindowCollectionBehaviorStationary |
+      NSWindowCollectionBehaviorCanJoinAllSpaces |
+      NSWindowCollectionBehaviorIgnoresCycle;
+  window.ignoresMouseEvents = YES;
+  [window orderFront:nil];
+}
+
+void SetShellWindowVisibleForOwlFresh(Shell* shell, NSString* title) {
+  if (!shell) {
+    return;
+  }
+  NSWindow* window = shell->window().GetNativeNSWindow();
+  if (!window) {
+    return;
+  }
+  [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+  window.title = title;
+  window.alphaValue = 1.0;
+  window.level = NSNormalWindowLevel;
+  window.collectionBehavior = NSWindowCollectionBehaviorFullScreenPrimary;
+  window.ignoresMouseEvents = NO;
+  [window makeKeyAndOrderFront:nil];
+  [window orderFrontRegardless];
+}
+
+void SetDevToolsFrontendWindowVisible(ShellDevToolsFrontend* frontend,
+                                      bool visible) {
+  if (!frontend || !frontend->frontend_shell()) {
+    return;
+  }
+  if (visible) {
+    SetShellWindowVisibleForOwlFresh(frontend->frontend_shell(),
+                                    @"minimal-browser DevTools");
+  } else {
+    SetShellWindowHiddenForOwlFresh(frontend->frontend_shell());
+  }
 }
 
 std::string FilePickerModeToString(blink::mojom::FileChooserParams::Mode mode) {
@@ -213,12 +272,7 @@ void ResizeShellWebContentsForOwlFresh(Shell* shell,
 
   [CATransaction begin];
   [CATransaction setDisableActions:YES];
-  shell->ResizeWebContentForTests(size);
-  if (NSWindow* window = WindowForWebContents(contents)) {
-    [window setContentSize:content_size];
-    [window.contentView setFrame:content_frame];
-    [window.contentView setNeedsLayout:YES];
-  }
+  contents->Resize(gfx::Rect(0, 0, size.width(), size.height()));
   NSView* native_view = contents->GetNativeView().GetNativeNSView();
   [native_view setFrame:content_frame];
   [native_view setNeedsLayout:YES];
@@ -337,6 +391,23 @@ const char* OwlFreshDevToolsLabelForMode(mojom::OwlFreshDevToolsMode mode) {
   }
 }
 
+std::optional<mojom::OwlFreshDevToolsMode> OwlFreshDevToolsModeForLabel(
+    const std::string& label) {
+  if (label == "devtools-bottom") {
+    return mojom::OwlFreshDevToolsMode::kBottom;
+  }
+  if (label == "devtools-right") {
+    return mojom::OwlFreshDevToolsMode::kRight;
+  }
+  if (label == "devtools-left") {
+    return mojom::OwlFreshDevToolsMode::kLeft;
+  }
+  if (label == "devtools-window") {
+    return mojom::OwlFreshDevToolsMode::kWindow;
+  }
+  return std::nullopt;
+}
+
 const char* OwlFreshDevToolsDockStateForMode(
     mojom::OwlFreshDevToolsMode mode) {
   switch (mode) {
@@ -451,6 +522,215 @@ int BlinkModifiersFromCocoa(uint32_t cocoa) {
     modifiers |= blink::WebInputEvent::kCapsLockOn;
   }
   return modifiers;
+}
+
+char32_t PrintableDomKeyCharacterFromWindowsKeyCode(uint32_t key_code,
+                                                    bool shifted) {
+  if (key_code >= '0' && key_code <= '9') {
+    if (!shifted) {
+      return key_code;
+    }
+    switch (key_code) {
+      case '0':
+        return ')';
+      case '1':
+        return '!';
+      case '2':
+        return '@';
+      case '3':
+        return '#';
+      case '4':
+        return '$';
+      case '5':
+        return '%';
+      case '6':
+        return '^';
+      case '7':
+        return '&';
+      case '8':
+        return '*';
+      case '9':
+        return '(';
+      default:
+        return key_code;
+    }
+  }
+  if (key_code >= 'A' && key_code <= 'Z') {
+    return shifted ? key_code : key_code + ('a' - 'A');
+  }
+  switch (key_code) {
+    case 32:
+      return ' ';
+    case 186:
+      return shifted ? ':' : ';';
+    case 187:
+      return shifted ? '+' : '=';
+    case 188:
+      return shifted ? '<' : ',';
+    case 189:
+      return shifted ? '_' : '-';
+    case 190:
+      return shifted ? '>' : '.';
+    case 191:
+      return shifted ? '?' : '/';
+    case 192:
+      return shifted ? '~' : '`';
+    case 219:
+      return shifted ? '{' : '[';
+    case 220:
+      return shifted ? '|' : '\\';
+    case 221:
+      return shifted ? '}' : ']';
+    case 222:
+      return shifted ? '"' : '\'';
+    case 96:
+    case 97:
+    case 98:
+    case 99:
+    case 100:
+    case 101:
+    case 102:
+    case 103:
+    case 104:
+    case 105:
+      return '0' + (key_code - 96);
+    case 106:
+      return '*';
+    case 107:
+      return '+';
+    case 109:
+      return '-';
+    case 110:
+      return '.';
+    case 111:
+      return '/';
+    default:
+      return 0;
+  }
+}
+
+ui::DomKey DomKeyFromOwlFreshKeyEvent(uint32_t key_code, uint32_t modifiers) {
+  bool shifted = (modifiers & NSEventModifierFlagShift) != 0;
+  char32_t printable =
+      PrintableDomKeyCharacterFromWindowsKeyCode(key_code, shifted);
+  if (printable != 0) {
+    return ui::DomKey::FromCharacter(printable);
+  }
+
+  switch (key_code) {
+    case 8:
+      return ui::DomKey::BACKSPACE;
+    case 9:
+      return ui::DomKey::TAB;
+    case 12:
+      return ui::DomKey::CLEAR;
+    case 13:
+      return ui::DomKey::ENTER;
+    case 16:
+      return ui::DomKey::SHIFT;
+    case 17:
+      return ui::DomKey::CONTROL;
+    case 18:
+      return ui::DomKey::ALT;
+    case 20:
+      return ui::DomKey::CAPS_LOCK;
+    case 27:
+      return ui::DomKey::ESCAPE;
+    case 33:
+      return ui::DomKey::PAGE_UP;
+    case 34:
+      return ui::DomKey::PAGE_DOWN;
+    case 35:
+      return ui::DomKey::END;
+    case 36:
+      return ui::DomKey::HOME;
+    case 37:
+      return ui::DomKey::ARROW_LEFT;
+    case 38:
+      return ui::DomKey::ARROW_UP;
+    case 39:
+      return ui::DomKey::ARROW_RIGHT;
+    case 40:
+      return ui::DomKey::ARROW_DOWN;
+    case 45:
+      return ui::DomKey::INSERT;
+    case 46:
+      return ui::DomKey::DEL;
+    case 91:
+      return ui::DomKey::META;
+    case 93:
+      return (modifiers & NSEventModifierFlagCommand) != 0
+                 ? ui::DomKey::META
+                 : ui::DomKey::CONTEXT_MENU;
+    case 112:
+    case 113:
+    case 114:
+    case 115:
+    case 116:
+    case 117:
+    case 118:
+    case 119:
+    case 120:
+    case 121:
+    case 122:
+    case 123:
+    case 124:
+    case 125:
+    case 126:
+    case 127:
+    case 128:
+    case 129:
+    case 130:
+    case 131:
+    case 132:
+    case 133:
+    case 134:
+    case 135:
+      return static_cast<ui::DomKey>(
+          static_cast<int>(ui::DomKey::F1) + (key_code - 112));
+    default:
+      return ui::DomKey::UNIDENTIFIED;
+  }
+}
+
+NSEventType NativeKeyEventTypeFromOwlFresh(uint32_t native_event_type,
+                                           bool key_down) {
+  switch (static_cast<NSEventType>(native_event_type)) {
+    case NSEventTypeKeyDown:
+      return NSEventTypeKeyDown;
+    case NSEventTypeKeyUp:
+      return NSEventTypeKeyUp;
+    case NSEventTypeFlagsChanged:
+      return NSEventTypeFlagsChanged;
+    default:
+      return key_down ? NSEventTypeKeyDown : NSEventTypeKeyUp;
+  }
+}
+
+blink::WebMouseWheelEvent::Phase OwlFreshWheelPhaseFromRaw(uint32_t phase) {
+  constexpr uint32_t known_phase_mask =
+      blink::WebMouseWheelEvent::kPhaseBegan |
+      blink::WebMouseWheelEvent::kPhaseStationary |
+      blink::WebMouseWheelEvent::kPhaseChanged |
+      blink::WebMouseWheelEvent::kPhaseEnded |
+      blink::WebMouseWheelEvent::kPhaseCancelled |
+      blink::WebMouseWheelEvent::kPhaseMayBegin |
+      blink::WebMouseWheelEvent::kPhaseBlocked;
+  return static_cast<blink::WebMouseWheelEvent::Phase>(phase &
+                                                       known_phase_mask);
+}
+
+ui::ScrollGranularity OwlFreshWheelDeltaUnitsFromRaw(uint32_t delta_units) {
+  switch (delta_units) {
+    case static_cast<uint32_t>(ui::ScrollGranularity::kScrollByPrecisePixel):
+      return ui::ScrollGranularity::kScrollByPrecisePixel;
+    case static_cast<uint32_t>(ui::ScrollGranularity::kScrollByPixel):
+      return ui::ScrollGranularity::kScrollByPixel;
+    case static_cast<uint32_t>(ui::ScrollGranularity::kScrollByPage):
+      return ui::ScrollGranularity::kScrollByPage;
+    default:
+      return ui::ScrollGranularity::kScrollByPixel;
+  }
 }
 
 class OwlFreshVideoCapture final : public viz::mojom::FrameSinkVideoConsumer {
@@ -655,7 +935,8 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
                                   public mojom::OwlFreshInput,
                                   public mojom::OwlFreshSurfaceTreeHost,
                                   public mojom::OwlFreshNativeSurfaceHost,
-                                  public mojom::OwlFreshDevToolsHost {
+                                  public mojom::OwlFreshDevToolsHost,
+                                  public WebContentsObserver {
  public:
   OwlFreshSessionImpl() = default;
   ~OwlFreshSessionImpl() override = default;
@@ -666,10 +947,13 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
   void SetClient(mojo::PendingRemote<mojom::OwlFreshClient> client) override {
     client_.Bind(std::move(client));
     g_owl_fresh_inspected_shell = CurrentShell();
+    ObserveCurrentWebContents();
     EnsureRenderWidgetProducingFramesForOwlFresh();
     if (client_) {
       client_->OnReady(base::GetCurrentProcId(), CurrentCompositorInfo());
       client_->OnSurfaceTreeChanged(SurfaceTreeFromRegistry());
+      PublishCursorIfChanged(true);
+      NotifyNavigationState(CurrentWebContents());
       client_->OnHostLog("OwlFreshSession bound over Mojo");
     }
     PublishCompositorWithRetry(80);
@@ -723,9 +1007,75 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     shell->LoadURL(GURL(url));
     EnsureRenderWidgetProducingFramesForOwlFresh();
     if (client_) {
-      client_->OnNavigationChanged(url, std::string(), true);
+      bool can_go_back = false;
+      bool can_go_forward = false;
+      if (WebContents* contents = CurrentWebContents()) {
+        NavigationController& controller = contents->GetController();
+        can_go_back = controller.CanGoBack();
+        can_go_forward = controller.CanGoForward();
+      }
+      client_->OnNavigationChanged(
+          url, std::string(), true, can_go_back, can_go_forward);
     }
     PublishCompositorWithRetry(40);
+  }
+
+  void GoBack() override {
+    WebContents* contents = CurrentWebContents();
+    if (!contents) {
+      Log("GoBack dropped: no WebContents");
+      return;
+    }
+    NavigationController& controller = contents->GetController();
+    if (!controller.CanGoBack()) {
+      Log("GoBack dropped: navigation controller has no back entry");
+      return;
+    }
+    controller.GoBack();
+    EnsureRenderWidgetProducingFramesForOwlFresh();
+    NotifyNavigationState(contents);
+    PublishCompositorWithRetry(40);
+  }
+
+  void GoForward() override {
+    WebContents* contents = CurrentWebContents();
+    if (!contents) {
+      Log("GoForward dropped: no WebContents");
+      return;
+    }
+    NavigationController& controller = contents->GetController();
+    if (!controller.CanGoForward()) {
+      Log("GoForward dropped: navigation controller has no forward entry");
+      return;
+    }
+    controller.GoForward();
+    EnsureRenderWidgetProducingFramesForOwlFresh();
+    NotifyNavigationState(contents);
+    PublishCompositorWithRetry(40);
+  }
+
+  void Reload() override {
+    Shell* shell = CurrentShell();
+    if (!shell) {
+      Log("Reload dropped: no shell");
+      return;
+    }
+    shell->Reload();
+    EnsureRenderWidgetProducingFramesForOwlFresh();
+    NotifyNavigationState(shell->web_contents());
+    PublishCompositorWithRetry(40);
+  }
+
+  void StopLoading() override {
+    Shell* shell = CurrentShell();
+    if (!shell) {
+      Log("StopLoading dropped: no shell");
+      return;
+    }
+    shell->Stop();
+    EnsureRenderWidgetProducingFramesForOwlFresh();
+    NotifyNavigationState(shell->web_contents());
+    PublishCompositorWithRetry(10);
   }
 
   void Resize(uint32_t width, uint32_t height, float scale) override {
@@ -737,10 +1087,19 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     }
     gfx::Size size(width, height);
     requested_size_ = size;
+    ui::OwlFreshDisplayPortalResize(CGRectMake(0, 0, width, height));
+    std::optional<mojom::OwlFreshDevToolsMode> active_devtools_mode =
+        OwlFreshDevToolsModeForLabel(active_devtools_label_);
+    if (active_devtools_mode && devtools_frontend_ &&
+        ApplyDevToolsLayout(*active_devtools_mode, active_devtools_label_,
+                            false)) {
+      Log(base::StringPrintf("Resize applied with DevTools width=%u height=%u",
+                             width, height));
+      return;
+    }
     ui::OwlFreshClearDevToolsDockLayout();
     ResizeShellWebContentsForOwlFresh(shell, contents, size);
     EnsureRenderWidgetProducingFramesForOwlFresh();
-    ui::OwlFreshDisplayPortalResize(CGRectMake(0, 0, width, height));
     PublishCompositorWithRetry(10);
     Log(base::StringPrintf("Resize applied width=%u height=%u", width, height));
   }
@@ -750,6 +1109,56 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     if (focused) {
       EnsureRenderWidgetProducingFramesForOwlFresh();
     }
+  }
+
+  void DidStartNavigation(NavigationHandle* navigation_handle) override {
+    if (!navigation_handle || !navigation_handle->IsInPrimaryMainFrame()) {
+      return;
+    }
+    NotifyNavigationState(web_contents());
+  }
+
+  void DidFinishNavigation(NavigationHandle* navigation_handle) override {
+    if (!navigation_handle || !navigation_handle->IsInPrimaryMainFrame()) {
+      return;
+    }
+    EnsureRenderWidgetProducingFramesForOwlFresh();
+    NotifyNavigationState(web_contents());
+    PublishCompositorWithRetry(40);
+  }
+
+  void DidStartLoading() override {
+    NotifyNavigationState(web_contents());
+  }
+
+  void DidStopLoading() override {
+    EnsureRenderWidgetProducingFramesForOwlFresh();
+    NotifyNavigationState(web_contents());
+    PublishCompositorWithRetry(40);
+  }
+
+  void TitleWasSet(NavigationEntry* entry) override {
+    NotifyNavigationState(web_contents());
+  }
+
+  void NotifyNavigationState(WebContents* contents) {
+    if (!client_ || !contents) {
+      return;
+    }
+    client_->OnNavigationChanged(
+        contents->GetVisibleURL().spec(),
+        base::UTF16ToUTF8(contents->GetTitle()),
+        contents->IsLoading(),
+        contents->GetController().CanGoBack(),
+        contents->GetController().CanGoForward());
+  }
+
+  void ObserveCurrentWebContents() {
+    WebContents* contents = CurrentWebContents();
+    if (contents == web_contents()) {
+      return;
+    }
+    Observe(contents);
   }
 
   void SendMouse(mojom::OwlFreshMouseEventPtr event) override {
@@ -770,7 +1179,6 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
       Log("SendMouse dropped: no RenderWidgetHostView");
       return;
     }
-    auto* view_base = static_cast<RenderWidgetHostViewBase*>(view);
     RenderWidgetHostImpl* host =
         web_contents_impl->GetRenderWidgetHostWithPageFocus();
     if (!host && view) {
@@ -787,26 +1195,15 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     base::TimeTicks now = base::TimeTicks::Now();
 
     if (event->kind == mojom::OwlFreshMouseKind::kWheel) {
-      blink::WebMouseWheelEvent wheel(blink::WebInputEvent::Type::kMouseWheel,
-                                      modifiers, now);
-      wheel.SetPositionInWidget(event->x, event->y);
-      wheel.SetPositionInScreen(event->x, event->y);
-      wheel.delta_x = event->delta_x;
-      wheel.delta_y = event->delta_y;
-      wheel.wheel_ticks_x = event->delta_x / 100.0f;
-      wheel.wheel_ticks_y = event->delta_y / 100.0f;
-      wheel.delta_units = ui::ScrollGranularity::kScrollByPrecisePixel;
-      wheel.dispatch_type = blink::WebInputEvent::DispatchType::kBlocking;
-      wheel.event_action =
-          blink::WebMouseWheelEvent::EventAction::kScrollVertical;
-      wheel.phase = blink::WebMouseWheelEvent::kPhaseBegan;
-      web_contents_impl->GetInputEventRouter()->RouteMouseWheelEvent(
-          view_base, &wheel, ui::LatencyInfo());
-      EnsureRenderWidgetProducingFramesForOwlFresh();
-      MarkLayerFixtureInput();
-      Log("SendMouse forwarded wheel");
+      ForwardWheelEventToChromium("SendMouse legacy wheel", event->x, event->y,
+                                  event->delta_x, event->delta_y,
+                                  event->delta_x / 40.0f,
+                                  event->delta_y / 40.0f, 0, 0,
+                                  event->modifiers, 0);
       return;
     }
+
+    auto* view_base = static_cast<RenderWidgetHostViewBase*>(view);
 
     blink::WebInputEvent::Type type = blink::WebInputEvent::Type::kMouseMove;
     if (event->kind == mojom::OwlFreshMouseKind::kDown) {
@@ -846,8 +1243,20 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     web_contents_impl->GetInputEventRouter()->RouteMouseEvent(
         view_base, &mouse, ui::LatencyInfo());
     EnsureRenderWidgetProducingFramesForOwlFresh();
+    PublishCursorIfChanged(false);
     MarkLayerFixtureInput();
     Log("SendMouse forwarded routed mouse");
+  }
+
+  void SendWheel(mojom::OwlFreshWheelEventPtr event) override {
+    if (!event) {
+      Log("SendWheel dropped: missing event");
+      return;
+    }
+    ForwardWheelEventToChromium(
+        "SendWheel", event->x, event->y, event->delta_x, event->delta_y,
+        event->wheel_ticks_x, event->wheel_ticks_y, event->phase,
+        event->momentum_phase, event->modifiers, event->delta_units);
   }
 
   void SendKey(mojom::OwlFreshKeyEventPtr event) override {
@@ -882,12 +1291,50 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     blink::WebInputEvent::Type type =
         event->key_down ? blink::WebInputEvent::Type::kRawKeyDown
                         : blink::WebInputEvent::Type::kKeyUp;
-    input::NativeWebKeyboardEvent key_event(type, modifiers,
-                                            base::TimeTicks::Now());
-    key_event.native_key_code = event->key_code;
-    key_event.windows_key_code = event->key_code;
-    CopyText(event->text, &key_event);
-    host->ForwardKeyboardEvent(key_event);
+    std::optional<input::NativeWebKeyboardEvent> key_event_storage;
+    if (event->native_event_type != 0) {
+      NSString* characters = base::SysUTF8ToNSString(event->characters);
+      NSString* characters_ignoring_modifiers =
+          base::SysUTF8ToNSString(event->characters_ignoring_modifiers);
+      NSWindow* window = CurrentWindow();
+      NSEvent* native_event = [NSEvent
+                 keyEventWithType:NativeKeyEventTypeFromOwlFresh(
+                                      event->native_event_type,
+                                      event->key_down)
+                         location:NSZeroPoint
+                    modifierFlags:static_cast<NSEventModifierFlags>(
+                                      event->modifiers)
+                        timestamp:0
+                     windowNumber:window ? [window windowNumber] : 0
+                          context:nil
+                       characters:characters
+      charactersIgnoringModifiers:characters_ignoring_modifiers
+                        isARepeat:event->is_repeat
+                          keyCode:static_cast<unsigned short>(
+                                      event->native_key_code)];
+      key_event_storage.emplace(base::apple::OwnedNSEvent(native_event));
+    } else {
+      key_event_storage.emplace(type, modifiers, base::TimeTicks::Now());
+      key_event_storage->native_key_code = event->key_code;
+      key_event_storage->windows_key_code = event->key_code;
+      key_event_storage->dom_key =
+          DomKeyFromOwlFreshKeyEvent(event->key_code, event->modifiers);
+    }
+    input::NativeWebKeyboardEvent& key_event = *key_event_storage;
+    if (!event->text.empty()) {
+      CopyText(event->text, &key_event);
+    }
+    std::vector<blink::mojom::EditCommandPtr> edit_commands;
+    if (event->key_down) {
+      edit_commands.reserve(event->edit_commands.size());
+      for (const std::string& command : event->edit_commands) {
+        if (!command.empty()) {
+          edit_commands.push_back(blink::mojom::EditCommand::New(command, ""));
+        }
+      }
+    }
+    host->ForwardKeyboardEventWithCommands(key_event, ui::LatencyInfo(),
+                                           std::move(edit_commands));
     Log("SendKey forwarded key event");
 
     if (event->key_down && !event->text.empty()) {
@@ -895,6 +1342,8 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
           blink::WebInputEvent::Type::kChar, modifiers, base::TimeTicks::Now());
       char_event.native_key_code = event->key_code;
       char_event.windows_key_code = event->key_code;
+      char_event.dom_key =
+          DomKeyFromOwlFreshKeyEvent(event->key_code, event->modifiers);
       CopyText(event->text, &char_event);
       host->ForwardKeyboardEvent(char_event);
       Log("SendKey forwarded char event");
@@ -905,6 +1354,7 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
 
   void Flush(FlushCallback callback) override {
     EnsureRenderWidgetProducingFramesForOwlFresh();
+    PublishCursorIfChanged(false);
     std::move(callback).Run(true);
   }
 
@@ -1035,6 +1485,104 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
   }
 
  private:
+  void ForwardWheelEventToChromium(const char* operation,
+                                   float x,
+                                   float y,
+                                   float delta_x,
+                                   float delta_y,
+                                   float wheel_ticks_x,
+                                   float wheel_ticks_y,
+                                   uint32_t phase,
+                                   uint32_t momentum_phase,
+                                   uint32_t modifiers,
+                                   uint32_t delta_units) {
+    WebContents* contents = CurrentWebContents();
+    if (!contents) {
+      Log(base::StrCat({operation, " dropped: no WebContents"}));
+      return;
+    }
+    auto* web_contents_impl = static_cast<WebContentsImpl*>(contents);
+    RenderWidgetHostView* view = contents->GetRenderWidgetHostView();
+    if (!view) {
+      Log(base::StrCat({operation, " dropped: no RenderWidgetHostView"}));
+      return;
+    }
+    RenderWidgetHostImpl* host =
+        web_contents_impl->GetRenderWidgetHostWithPageFocus();
+    if (!host) {
+      host = static_cast<RenderWidgetHostImpl*>(view->GetRenderWidgetHost());
+    }
+    if (!host) {
+      Log(base::StrCat({operation, " dropped: no RenderWidgetHost"}));
+      return;
+    }
+
+    host->input_router()->MakeActive();
+    host->SetActive(true);
+    host->Focus();
+
+    blink::WebMouseWheelEvent wheel(blink::WebInputEvent::Type::kMouseWheel,
+                                    BlinkModifiersFromCocoa(modifiers),
+                                    base::TimeTicks::Now());
+    wheel.SetPositionInWidget(x, y);
+    gfx::Rect offset = contents->GetContainerBounds();
+    wheel.SetPositionInScreen(x + offset.x(), y + offset.y());
+    wheel.button = blink::WebPointerProperties::Button::kNoButton;
+    if (delta_x == 0 && delta_y != 0) {
+      wheel.rails_mode = blink::WebInputEvent::RailsMode::kRailsModeVertical;
+    } else if (delta_y == 0 && delta_x != 0) {
+      wheel.rails_mode = blink::WebInputEvent::RailsMode::kRailsModeHorizontal;
+    }
+    wheel.delta_x = delta_x;
+    wheel.delta_y = delta_y;
+    wheel.wheel_ticks_x = wheel_ticks_x;
+    wheel.wheel_ticks_y = wheel_ticks_y;
+    wheel.delta_units = OwlFreshWheelDeltaUnitsFromRaw(delta_units);
+    wheel.dispatch_type = blink::WebInputEvent::DispatchType::kBlocking;
+    wheel.phase = OwlFreshWheelPhaseFromRaw(phase);
+    wheel.momentum_phase = OwlFreshWheelPhaseFromRaw(momentum_phase);
+    wheel.event_action =
+        blink::WebMouseWheelEvent::GetPlatformSpecificDefaultEventAction(wheel);
+
+    // The Swift host already targets one WebContents surface. Use Chromium's
+    // normal Mac wheel phase handler before forwarding so phase-less mouse
+    // wheel devices still get the synthetic begin/change/end sequence that
+    // MouseWheelEventQueue requires.
+    auto* mac_view = static_cast<RenderWidgetHostViewMac*>(view);
+    const bool is_fling_capable =
+        wheel.momentum_phase != blink::WebMouseWheelEvent::kPhaseNone;
+    mac_view->GetMouseWheelPhaseHandler()->AddPhaseIfNeededAndScheduleEndEvent(
+        wheel, /*should_route_event=*/false, is_fling_capable);
+    if (wheel.phase == blink::WebMouseWheelEvent::kPhaseBegan) {
+      blink::WebGestureEvent fling_cancel =
+          ui::MakeWebGestureEventFlingCancel(wheel);
+      host->ForwardGestureEvent(fling_cancel);
+    }
+    host->ForwardWheelEvent(wheel);
+    EnsureRenderWidgetProducingFramesForOwlFresh();
+    PublishCursorIfChanged(false);
+    MarkLayerFixtureInput();
+    Log(base::StringPrintf(
+        "%s forwarded phase=%u momentum=%u delta=(%.1f,%.1f) ticks=(%.2f,%.2f)",
+        operation, phase, momentum_phase, delta_x, delta_y, wheel_ticks_x,
+        wheel_ticks_y));
+  }
+
+  void PublishCursorIfChanged(bool force) {
+    if (!client_) {
+      return;
+    }
+    const int32_t cursor_type = ui::OwlFreshLatestCursorType();
+    if (!force && cursor_type == last_sent_cursor_type_) {
+      return;
+    }
+    last_sent_cursor_type_ = cursor_type;
+    auto cursor = mojom::OwlFreshCursorInfo::New();
+    cursor->type = cursor_type;
+    client_->OnCursorChanged(std::move(cursor));
+    Log(base::StringPrintf("Cursor changed type=%d", cursor_type));
+  }
+
   void CloseDevToolsFromFrontend() { CloseDevToolsInternal(); }
 
   void ApplyDevToolsDockStateFromFrontend(const std::string& dock_state) {
@@ -1071,6 +1619,15 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     if (inspected_bounds.size().IsEmpty()) {
       return;
     }
+    if ((active_devtools_label_ == "devtools-right" ||
+         active_devtools_label_ == "devtools-left") &&
+        inspected_bounds.width() >= container_bounds.width()) {
+      return;
+    }
+    if (active_devtools_label_ == "devtools-bottom" &&
+        inspected_bounds.height() >= container_bounds.height()) {
+      return;
+    }
 
     ResizeShellWebContentsForOwlFresh(shell, inspected_contents,
                                       inspected_bounds.size());
@@ -1104,6 +1661,8 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     ui::OwlFreshSetDevToolsSurfaceLabel(label);
     active_devtools_label_ = label;
     owl_fresh::MarkDevToolsFrontend(devtools_contents);
+    SetDevToolsFrontendWindowVisible(devtools_frontend_.get(),
+                                     label == "devtools-window");
 
     gfx::Rect inspected_bounds = inspected_contents->GetContainerBounds();
     const int width =
@@ -1144,6 +1703,7 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     if (!devtools_frontend_) {
       return false;
     }
+    SetDevToolsFrontendWindowVisible(devtools_frontend_.get(), false);
     devtools_frontend_->Close();
     devtools_frontend_ = base::WeakPtr<ShellDevToolsFrontend>();
     active_devtools_label_.clear();
@@ -1567,6 +2127,7 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
   mojo::Remote<mojom::OwlFreshClient> client_;
   uint32_t last_context_id_ = 0;
   gfx::Size requested_size_{960, 640};
+  int32_t last_sent_cursor_type_ = std::numeric_limits<int32_t>::min();
   CAContext* __strong fixture_context_ = nil;
   CALayer* __strong fixture_root_ = nil;
   CALayer* __strong fixture_input_layer_ = nil;

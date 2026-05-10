@@ -182,7 +182,10 @@ class OwlFreshMojoClientImpl final : public content::mojom::OwlFreshClient {
       content::mojom::OwlFreshSurfaceTreePtr surface_tree) override;
   void OnNavigationChanged(const std::string& url,
                            const std::string& title,
-                           bool loading) override;
+                           bool loading,
+                           bool can_go_back,
+                           bool can_go_forward) override;
+  void OnCursorChanged(content::mojom::OwlFreshCursorInfoPtr cursor) override;
   void OnHostLog(const std::string& message) override;
 
  private:
@@ -310,12 +313,24 @@ void OwlFreshMojoClientImpl::OnSurfaceTreeChanged(
 
 void OwlFreshMojoClientImpl::OnNavigationChanged(const std::string& url,
                                                  const std::string& title,
-                                                 bool loading) {
+                                                 bool loading,
+                                                 bool can_go_back,
+                                                 bool can_go_forward) {
   OwlFreshMojoEvent event = {};
   event.kind = kOwlFreshMojoEventNavigation;
   event.url = url.c_str();
   event.title = title.c_str();
   event.loading = loading;
+  event.can_go_back = can_go_back;
+  event.can_go_forward = can_go_forward;
+  Emit(session_->callback, session_->user_data, event);
+}
+
+void OwlFreshMojoClientImpl::OnCursorChanged(
+    content::mojom::OwlFreshCursorInfoPtr cursor) {
+  OwlFreshMojoEvent event = {};
+  event.kind = kOwlFreshMojoEventCursor;
+  event.cursor_type = cursor ? cursor->type : 0;
   Emit(session_->callback, session_->user_data, event);
 }
 

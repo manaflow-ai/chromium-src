@@ -123,7 +123,7 @@ static void OwlFreshMojoRuntimeEventThunk(
   NSString* message =
       event->message ? [NSString stringWithUTF8String:event->message] : nil;
   _eventHandler(event->kind, event->context_id, event->host_pid, event->loading,
-                url, title, message);
+                event->can_go_back, event->can_go_forward, url, title, message);
 }
 
 - (BOOL)setClientWithHandle:(uint64_t)handle error:(NSError**)error {
