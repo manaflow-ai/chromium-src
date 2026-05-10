@@ -82,6 +82,20 @@ std::map<uint64_t, OwlFreshSurfaceRecord>& SurfaceRecords() {
   return *records;
 }
 
+OwlFreshSurfaceTreeChangedCallback& SurfaceTreeChangedCallbackStorage() {
+  static base::NoDestructor<OwlFreshSurfaceTreeChangedCallback> callback;
+  return *callback;
+}
+
+void BumpPortalGenerationAndNotify() {
+  g_portal_generation.fetch_add(1, std::memory_order_relaxed);
+  const OwlFreshSurfaceTreeChangedCallback& callback =
+      SurfaceTreeChangedCallbackStorage();
+  if (!callback.is_null()) {
+    callback.Run();
+  }
+}
+
 uint64_t& NextSurfaceID() {
   static uint64_t next_id = 1;
   return next_id;
@@ -238,7 +252,7 @@ int32_t OwlFreshLatestCursorType() {
 
 void OwlFreshSetDevToolsSurfaceLabel(const std::string& label) {
   DevToolsSurfaceLabelStorage() = label.empty() ? "devtools-bottom" : label;
-  g_portal_generation.fetch_add(1, std::memory_order_relaxed);
+  BumpPortalGenerationAndNotify();
 }
 
 std::string OwlFreshDevToolsSurfaceLabel() {
@@ -253,7 +267,7 @@ void OwlFreshSetDevToolsDockLayout(const std::string& label,
   layout.label = label;
   layout.web_bounds = NormalizedFrame(web_bounds);
   layout.devtools_bounds = NormalizedFrame(devtools_bounds);
-  g_portal_generation.fetch_add(1, std::memory_order_relaxed);
+  BumpPortalGenerationAndNotify();
 }
 
 void OwlFreshClearDevToolsDockLayout() {
@@ -267,7 +281,12 @@ void OwlFreshClearDevToolsDockLayout() {
       record.visible = false;
     }
   }
-  g_portal_generation.fetch_add(1, std::memory_order_relaxed);
+  BumpPortalGenerationAndNotify();
+}
+
+void OwlFreshSetSurfaceTreeChangedCallback(
+    OwlFreshSurfaceTreeChangedCallback callback) {
+  SurfaceTreeChangedCallbackStorage() = std::move(callback);
 }
 
 std::vector<OwlFreshSurfaceSnapshot> OwlFreshSurfaceTreeSnapshot() {
@@ -353,7 +372,7 @@ void OwlFreshDisplayPortalPresentCAContext(uint32_t ca_context_id,
 
   [CATransaction commit];
   [CATransaction flush];
-  g_portal_generation.fetch_add(1, std::memory_order_relaxed);
+  BumpPortalGenerationAndNotify();
 }
 
 void HidePreviousRootSurfaceRecords(OwlFreshSurfaceKind kind,
@@ -422,7 +441,7 @@ void OwlFreshDisplayPortalPresentCAContextForSurface(
   [CATransaction commit];
   [CATransaction flush];
 
-  g_portal_generation.fetch_add(1, std::memory_order_relaxed);
+  BumpPortalGenerationAndNotify();
 }
 
 void OwlFreshPublishNativeMenuSurface(
@@ -460,7 +479,7 @@ void OwlFreshPublishNativeMenuSurface(
   record.file_picker_allows_multiple = false;
   record.file_picker_upload_folder = false;
   record.label = label;
-  g_portal_generation.fetch_add(1, std::memory_order_relaxed);
+  BumpPortalGenerationAndNotify();
 }
 
 void OwlFreshPublishNativeFilePickerSurface(
@@ -497,7 +516,7 @@ void OwlFreshPublishNativeFilePickerSurface(
   record.file_picker_allows_multiple = allows_multiple;
   record.file_picker_upload_folder = upload_folder;
   record.label = label;
-  g_portal_generation.fetch_add(1, std::memory_order_relaxed);
+  BumpPortalGenerationAndNotify();
 }
 
 void OwlFreshMarkSurfaceHidden(uint64_t surface_key) {
@@ -506,7 +525,7 @@ void OwlFreshMarkSurfaceHidden(uint64_t surface_key) {
     return;
   }
   it->second.visible = false;
-  g_portal_generation.fetch_add(1, std::memory_order_relaxed);
+  BumpPortalGenerationAndNotify();
 }
 
 void OwlFreshClearNativeMenuSurfaces() {
@@ -518,7 +537,7 @@ void OwlFreshClearNativeMenuSurfaces() {
     }
   }
   if (changed) {
-    g_portal_generation.fetch_add(1, std::memory_order_relaxed);
+    BumpPortalGenerationAndNotify();
   }
 }
 
@@ -532,7 +551,7 @@ void OwlFreshClearNativeFilePickerSurfaces() {
     }
   }
   if (changed) {
-    g_portal_generation.fetch_add(1, std::memory_order_relaxed);
+    BumpPortalGenerationAndNotify();
   }
 }
 
@@ -568,7 +587,7 @@ void OwlFreshDisplayPortalPresentIOSurface(IOSurfaceRef io_surface,
 
   [CATransaction commit];
   [CATransaction flush];
-  g_portal_generation.fetch_add(1, std::memory_order_relaxed);
+  BumpPortalGenerationAndNotify();
 }
 
 void OwlFreshDisplayPortalResize(CGRect frame) {
@@ -586,7 +605,7 @@ void OwlFreshDisplayPortalResize(CGRect frame) {
   }
   [CATransaction commit];
   [CATransaction flush];
-  g_portal_generation.fetch_add(1, std::memory_order_relaxed);
+  BumpPortalGenerationAndNotify();
 }
 
 void OwlFreshDisplayPortalPresentLayer(CALayer* layer, CGRect frame) {
@@ -605,7 +624,7 @@ void OwlFreshDisplayPortalPresentLayer(CALayer* layer, CGRect frame) {
 
   [CATransaction commit];
   [CATransaction flush];
-  g_portal_generation.fetch_add(1, std::memory_order_relaxed);
+  BumpPortalGenerationAndNotify();
 }
 
 }  // namespace ui

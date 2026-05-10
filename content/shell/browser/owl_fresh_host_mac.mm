@@ -948,6 +948,9 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
 
   void SetClient(mojo::PendingRemote<mojom::OwlFreshClient> client) override {
     client_.Bind(std::move(client));
+    ui::OwlFreshSetSurfaceTreeChangedCallback(base::BindRepeating(
+        &OwlFreshSessionImpl::PublishSurfaceTreeChanged,
+        weak_factory_.GetWeakPtr()));
     g_owl_fresh_inspected_shell = CurrentShell();
     ObserveCurrentWebContents();
     EnsureRenderWidgetProducingFramesForOwlFresh();
@@ -1638,6 +1641,12 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     cursor->type = cursor_type;
     client_->OnCursorChanged(std::move(cursor));
     Log(base::StringPrintf("Cursor changed type=%d", cursor_type));
+  }
+
+  void PublishSurfaceTreeChanged() {
+    if (client_) {
+      client_->OnSurfaceTreeChanged(SurfaceTreeFromRegistry());
+    }
   }
 
   void CloseDevToolsFromFrontend() { CloseDevToolsInternal(); }

@@ -9,6 +9,7 @@
 #include <CoreGraphics/CoreGraphics.h>
 #include <IOSurface/IOSurfaceRef.h>
 
+#include "base/functional/callback.h"
 #include "ui/accelerated_widget_mac/accelerated_widget_mac_export.h"
 
 #if defined(__OBJC__)
@@ -83,6 +84,9 @@ ACCELERATED_WIDGET_MAC_EXPORT void OwlFreshSetDevToolsDockLayout(
     CGRect devtools_bounds);
 ACCELERATED_WIDGET_MAC_EXPORT void OwlFreshClearDevToolsDockLayout();
 ACCELERATED_WIDGET_MAC_EXPORT uint64_t OwlFreshDisplayPortalGeneration();
+using OwlFreshSurfaceTreeChangedCallback = base::RepeatingCallback<void()>;
+ACCELERATED_WIDGET_MAC_EXPORT void OwlFreshSetSurfaceTreeChangedCallback(
+    OwlFreshSurfaceTreeChangedCallback callback);
 ACCELERATED_WIDGET_MAC_EXPORT std::vector<OwlFreshSurfaceSnapshot>
 OwlFreshSurfaceTreeSnapshot();
 ACCELERATED_WIDGET_MAC_EXPORT void OwlFreshDisplayPortalPresentCAContext(
