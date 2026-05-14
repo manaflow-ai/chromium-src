@@ -328,7 +328,6 @@ extern "C" OwlFreshMojoSession* owl_fresh_mojo_session_create(
   base::LaunchOptions launch_options;
   base::FilePath program_path(content_shell_path);
   base::CommandLine command_line(program_path);
-  command_line.AppendSwitch("no-sandbox");
   const bool visible_control_mode = std::getenv("OWL_FRESH_NO_EMBED") != nullptr;
   if (!visible_control_mode) {
     command_line.AppendSwitch("fresh-owl-embed");
@@ -353,7 +352,7 @@ extern "C" OwlFreshMojoSession* owl_fresh_mojo_session_create(
   if (std::getenv("OWL_FRESH_DISABLE_GPU") != nullptr) {
     command_line.AppendSwitch("disable-gpu");
   }
-  if (std::getenv("OWL_FRESH_NO_IN_PROCESS_GPU") == nullptr) {
+  if (std::getenv("OWL_FRESH_IN_PROCESS_GPU") != nullptr) {
     command_line.AppendSwitch("in-process-gpu");
   }
   command_line.AppendSwitchASCII("enable-logging", "stderr");
