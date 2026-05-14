@@ -320,6 +320,21 @@ extern "C" OwlFreshMojoSession* owl_fresh_mojo_session_create(
     const char* user_data_dir,
     OwlFreshMojoEventCallback callback,
     void* user_data) {
+  return owl_fresh_mojo_session_create_with_proxy(content_shell_path,
+                                                 initial_url,
+                                                 user_data_dir,
+                                                 nullptr,
+                                                 callback,
+                                                 user_data);
+}
+
+extern "C" OwlFreshMojoSession* owl_fresh_mojo_session_create_with_proxy(
+    const char* content_shell_path,
+    const char* initial_url,
+    const char* user_data_dir,
+    const char* proxy_server,
+    OwlFreshMojoEventCallback callback,
+    void* user_data) {
   if (!GetGlobal().initialized || !content_shell_path || !*content_shell_path) {
     return nullptr;
   }
@@ -355,8 +370,7 @@ extern "C" OwlFreshMojoSession* owl_fresh_mojo_session_create(
   if (std::getenv("OWL_FRESH_IN_PROCESS_GPU") != nullptr) {
     command_line.AppendSwitch("in-process-gpu");
   }
-  if (const char* proxy_server = std::getenv("CMUX_CHROMIUM_PROXY_SERVER");
-      proxy_server && *proxy_server) {
+  if (proxy_server && *proxy_server) {
     command_line.AppendSwitchASCII("proxy-server", proxy_server);
   }
   command_line.AppendSwitchASCII("enable-logging", "stderr");

@@ -188,9 +188,7 @@ class ShellControllerImpl : public mojom::ShellController {
     CHECK(!Shell::windows().empty());
     WebContents* contents = Shell::windows()[0]->web_contents();
     contents->GetPrimaryMainFrame()->ExecuteJavaScriptForTests(
-        script, /*user_gesture=*/true, /*resolve_promises=*/true,
-        /*honor_js_content_settings=*/false, ISOLATED_WORLD_ID_GLOBAL,
-        std::move(callback));
+        script, std::move(callback), ISOLATED_WORLD_ID_GLOBAL);
   }
 
   void ShutDown() override { Shell::Shutdown(); }

@@ -45,6 +45,13 @@ OWL_FRESH_MOJO_EXPORT OwlFreshMojoSession* owl_fresh_mojo_session_create(
     const char* user_data_dir,
     OwlFreshMojoEventCallback callback,
     void* user_data);
+OWL_FRESH_MOJO_EXPORT OwlFreshMojoSession*
+owl_fresh_mojo_session_create_with_proxy(const char* content_shell_path,
+                                         const char* initial_url,
+                                         const char* user_data_dir,
+                                         const char* proxy_server,
+                                         OwlFreshMojoEventCallback callback,
+                                         void* user_data);
 OWL_FRESH_MOJO_EXPORT void owl_fresh_mojo_session_destroy(
     OwlFreshMojoSession* session);
 OWL_FRESH_MOJO_EXPORT int32_t owl_fresh_mojo_session_host_pid(
