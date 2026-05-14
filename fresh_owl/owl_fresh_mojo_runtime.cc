@@ -355,6 +355,10 @@ extern "C" OwlFreshMojoSession* owl_fresh_mojo_session_create(
   if (std::getenv("OWL_FRESH_IN_PROCESS_GPU") != nullptr) {
     command_line.AppendSwitch("in-process-gpu");
   }
+  if (const char* proxy_server = std::getenv("CMUX_CHROMIUM_PROXY_SERVER");
+      proxy_server && *proxy_server) {
+    command_line.AppendSwitchASCII("proxy-server", proxy_server);
+  }
   command_line.AppendSwitchASCII("enable-logging", "stderr");
   command_line.AppendSwitchASCII("vmodule", "*owl*=1,*fresh*=1,*shell*=1");
   if (user_data_dir && *user_data_dir) {
