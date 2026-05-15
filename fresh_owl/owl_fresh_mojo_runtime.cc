@@ -320,6 +320,21 @@ extern "C" OwlFreshMojoSession* owl_fresh_mojo_session_create(
     const char* user_data_dir,
     OwlFreshMojoEventCallback callback,
     void* user_data) {
+  return owl_fresh_mojo_session_create_with_proxy(content_shell_path,
+                                                 initial_url,
+                                                 user_data_dir,
+                                                 nullptr,
+                                                 callback,
+                                                 user_data);
+}
+
+extern "C" OwlFreshMojoSession* owl_fresh_mojo_session_create_with_proxy(
+    const char* content_shell_path,
+    const char* initial_url,
+    const char* user_data_dir,
+    const char* proxy_server,
+    OwlFreshMojoEventCallback callback,
+    void* user_data) {
   if (!GetGlobal().initialized || !content_shell_path || !*content_shell_path) {
     return nullptr;
   }
@@ -328,7 +343,6 @@ extern "C" OwlFreshMojoSession* owl_fresh_mojo_session_create(
   base::LaunchOptions launch_options;
   base::FilePath program_path(content_shell_path);
   base::CommandLine command_line(program_path);
-  command_line.AppendSwitch("no-sandbox");
   const bool visible_control_mode = std::getenv("OWL_FRESH_NO_EMBED") != nullptr;
   if (!visible_control_mode) {
     command_line.AppendSwitch("fresh-owl-embed");
@@ -353,8 +367,11 @@ extern "C" OwlFreshMojoSession* owl_fresh_mojo_session_create(
   if (std::getenv("OWL_FRESH_DISABLE_GPU") != nullptr) {
     command_line.AppendSwitch("disable-gpu");
   }
-  if (std::getenv("OWL_FRESH_NO_IN_PROCESS_GPU") == nullptr) {
+  if (std::getenv("OWL_FRESH_IN_PROCESS_GPU") != nullptr) {
     command_line.AppendSwitch("in-process-gpu");
+  }
+  if (proxy_server && *proxy_server) {
+    command_line.AppendSwitchASCII("proxy-server", proxy_server);
   }
   command_line.AppendSwitchASCII("enable-logging", "stderr");
   command_line.AppendSwitchASCII("vmodule", "*owl*=1,*fresh*=1,*shell*=1");

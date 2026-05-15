@@ -701,7 +701,11 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
       button = blink::WebPointerProperties::Button::kRight;
     }
 
-    if (type == blink::WebInputEvent::Type::kMouseDown) {
+    const bool has_pressed_button =
+        button != blink::WebPointerProperties::Button::kNoButton;
+    if (type == blink::WebInputEvent::Type::kMouseDown ||
+        (type == blink::WebInputEvent::Type::kMouseMove &&
+         has_pressed_button)) {
       if (button == blink::WebPointerProperties::Button::kLeft) {
         modifiers |= blink::WebInputEvent::kLeftButtonDown;
       } else if (button == blink::WebPointerProperties::Button::kRight) {
@@ -715,10 +719,7 @@ class OwlFreshSessionImpl final : public mojom::OwlFreshSession,
     mouse.SetPositionInWidget(event->x, event->y);
     gfx::Rect offset = contents->GetContainerBounds();
     mouse.SetPositionInScreen(event->x + offset.x(), event->y + offset.y());
-    mouse.button =
-        type == blink::WebInputEvent::Type::kMouseMove
-            ? blink::WebPointerProperties::Button::kNoButton
-            : button;
+    mouse.button = button;
     mouse.click_count = event->click_count > 0 ? event->click_count : 1;
     web_contents_impl->GetInputEventRouter()->RouteMouseEvent(
         view_base, &mouse, ui::LatencyInfo());
