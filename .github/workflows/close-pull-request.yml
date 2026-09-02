@@ -21,6 +21,8 @@ jobs:
     # This mirror accepts changes through Gerrit, not GitHub pull requests.
     # Keep the write-capable job limited to the canonical default branch.
     if: >-
+      github.event_name == 'pull_request_target' &&
+      github.event.action == 'opened' &&
       github.repository == 'manaflow-ai/chromium-src' &&
       github.ref == 'refs/heads/main' &&
       github.event.pull_request.base.ref == 'main'
