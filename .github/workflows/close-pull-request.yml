@@ -20,12 +20,17 @@ jobs:
     name: Close unsupported pull request
     # This mirror accepts changes through Gerrit, not GitHub pull requests.
     # Keep the write-capable job limited to the canonical default branch.
+    # Stable account IDs keep trusted maintainers' security fixes open.
+    # 38676809=austinywang, 67667005=azooz2003-bit, 54008264=lawrencecchen.
     if: >-
       github.event_name == 'pull_request_target' &&
       github.event.action == 'opened' &&
       github.repository == 'manaflow-ai/chromium-src' &&
       github.ref == 'refs/heads/main' &&
-      github.event.pull_request.base.ref == 'main'
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.user.id != 38676809 &&
+      github.event.pull_request.user.id != 67667005 &&
+      github.event.pull_request.user.id != 54008264
     permissions:
       issues: write # Required for the action's issue-comment API call.
       pull-requests: write # Required for the action's pull-request close API call.
