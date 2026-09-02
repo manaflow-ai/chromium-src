@@ -4,15 +4,40 @@
 # https://github.com/superbrothers/close-pull-request
 name: Close Pull Request
 
+# This trusted-base workflow only performs the documented PR close operation.
 on:
   pull_request_target:
-    types: [opened]
+    types: [opened] # zizmor: ignore[dangerous-triggers] The workflow never checks out or executes PR content.
+
+permissions: {}
+
+concurrency:
+  group: close-pull-request-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
 
 jobs:
   run:
+    name: Close unsupported pull request
+    # This mirror accepts changes through Gerrit, not GitHub pull requests.
+    # Keep the write-capable job limited to the canonical default branch.
+    # Stable account IDs keep trusted maintainers' security fixes open.
+    # 38676809=austinywang, 67667005=azooz2003-bit, 54008264=lawrencecchen.
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      github.event.action == 'opened' &&
+      github.repository == 'manaflow-ai/chromium-src' &&
+      github.ref == 'refs/heads/main' &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.user.id != 38676809 &&
+      github.event.pull_request.user.id != 67667005 &&
+      github.event.pull_request.user.id != 54008264
+    permissions:
+      issues: write # Required for the action's issue-comment API call.
+      pull-requests: write # Required for the action's pull-request close API call.
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-    - uses: superbrothers/close-pull-request@v3
+    - uses: superbrothers/close-pull-request@9c18513d320d7b2c7185fb93396d0c664d5d8448 # v3.1.2
       with:
         comment: >
           Thanks for your contribution!
